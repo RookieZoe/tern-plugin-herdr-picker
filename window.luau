@@ -26,11 +26,11 @@ local AGENT_ICON: { [string]: string } = {
 }
 
 local STATUS_LABEL: { [string]: string } = {
-	working = "工作中",
-	blocked = "等待输入",
-	done = "已完成",
-	idle = "空闲",
-	error = "出错",
+	working = "working",
+	blocked = "needs input",
+	done = "done",
+	idle = "idle",
+	error = "error",
 }
 
 type HcPane = {
@@ -118,7 +118,7 @@ end
 local function parse(stdout: string): ({ HcPane }?, string?)
 	local ok, doc = pcall(tern.json.decode, stdout)
 	if not ok or type(doc) ~= "table" or type(doc.terminals) ~= "table" then
-		return nil, "hc 输出无法解析"
+		return nil, "could not read hc output"
 	end
 	local out: { HcPane } = {}
 	for _, r in doc.terminals do
@@ -171,7 +171,7 @@ local function open_pane(cx: WindowCx, address: string, cwd: string)
 
 	local target = cx.session:focused()
 	if not target then
-		cx:toast("error", "Herdr: 没有可拆分的 pane")
+		cx:toast("error", "Herdr: no pane to split")
 		return
 	end
 	local command = attach_command(address)
@@ -183,7 +183,7 @@ local function open_pane(cx: WindowCx, address: string, cwd: string)
 	if pane then
 		tern.kv.set(key, pane)
 	else
-		cx:toast("error", "Herdr: 无法打开 " .. address)
+		cx:toast("error", "Herdr: could not open " .. address)
 	end
 end
 
@@ -216,7 +216,7 @@ local function show_picker(cx: WindowCx, panes: { HcPane })
 					table.insert(bits, STATUS_LABEL[p.status] or p.status)
 				end
 			else
-				table.insert(bits, if p.program ~= "" then "终端 · " .. p.program else "终端")
+				table.insert(bits, if p.program ~= "" then "terminal · " .. p.program else "terminal")
 			end
 			if p.cwd ~= "" then
 				table.insert(bits, short_path(p.cwd))
@@ -224,7 +224,7 @@ local function show_picker(cx: WindowCx, panes: { HcPane })
 			local item: PickItem = {
 				label = p.where,
 				detail = table.concat(bits, "  ·  "),
-				group = if p.agent then "Agent CLI" else "终端",
+				group = if p.agent then "Agent CLIs" else "Terminals",
 				current = open_now[p.address] or nil,
 				address = p.address,
 				cwd = p.cwd,
@@ -239,7 +239,7 @@ local function show_picker(cx: WindowCx, panes: { HcPane })
 
 	local opts: PickOptions = {
 		items = items(true),
-		placeholder = "查找 herdr-core pane…",
+		placeholder = "Find a herdr-core pane…",
 		icon = "terminal",
 		action = "attach",
 	}
@@ -273,12 +273,12 @@ tern.command({
 			function(r: ProcessResult, cx2: WindowCx?)
 				local wcx = cx2 or cx
 				if r.timed_out then
-					wcx:toast("error", "Herdr Picker: hc ls 超时")
+					wcx:toast("error", "Herdr Picker: hc ls timed out")
 					return
 				end
 				if r.status ~= 0 then
 					local msg = if r.stderr ~= "" then r.stderr else r.stdout
-					wcx:toast("error", "Herdr Picker: hc ls 失败", first_line(string.gsub(msg, "%s+$", "")))
+					wcx:toast("error", "Herdr Picker: hc ls failed", first_line(string.gsub(msg, "%s+$", "")))
 					return
 				end
 				local panes, err = parse(r.stdout)
@@ -287,14 +287,14 @@ tern.command({
 					return
 				end
 				if #panes == 0 then
-					wcx:toast("info", "herdr-core 里没有正在运行的 pane")
+					wcx:toast("info", "No running herdr-core panes")
 					return
 				end
 				show_picker(wcx, panes)
 			end)
 		if not ok then
-			cx:toast("error", "Herdr Picker: 无法运行 hc",
-				first_line(tostring(spawn_err)) .. "（可设置 HC_BIN 环境变量）")
+			cx:toast("error", "Herdr Picker: could not run hc",
+				first_line(tostring(spawn_err)) .. " (set HC_BIN to its full path)")
 		end
 	end,
 })

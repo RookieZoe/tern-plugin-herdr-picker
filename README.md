@@ -6,22 +6,22 @@ A Tern plugin that lists the panes running in
 Run **Herdr: pick a pane** from the command palette. Tern's own picker opens with every live
 herdr-core pane, split into two groups:
 
-- **Agent CLI**: panes running an agent such as `claude-code` or `codex`, with its status
-  (working, waiting for input, done…) and directory.
-- **终端 (Terminals)**: plain shells (`zsh`, `bash`, `pwsh`, `cmd`…), with the shell and directory.
+- **Agent CLIs**: panes running an agent such as `claude-code` or `codex`, with its status
+  (working, needs input, done, idle) and directory.
+- **Terminals**: plain shells (`zsh`, `bash`, `pwsh`, `cmd`…), with the shell and directory.
 
 Type to filter, ↑/↓ to move, ↵ to attach. The chosen pane opens to the right of the focused one,
 running `hc attach <address>` in the pane's directory. A pane already open in this window shows a
 check, and picking it again focuses that split instead of opening another.
 
 ```
-查找 herdr-core pane…
+Find a herdr-core pane…
 
-Agent CLI
-  ✦  my-app / 2      claude-code  ·  已完成  ·  ~/Codes/my-app
-  ✦  api / 1         codex  ·  工作中  ·  ~/Codes/api
-终端
-  >_ my-app / 1      终端 · zsh  ·  ~/Codes/my-app
+Agent CLIs
+  ✦  my-app / 2      claude-code  ·  done  ·  ~/Codes/my-app
+  ✦  api / 1         codex  ·  working  ·  ~/Codes/api
+Terminals
+  >_ my-app / 1      terminal · zsh  ·  ~/Codes/my-app
 ```
 
 ## Requirements
