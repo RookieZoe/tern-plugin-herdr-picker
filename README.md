@@ -34,14 +34,14 @@ Works on macOS, Linux and Windows.
 ## Install
 
 ```sh
-tern plugin install github.com/RookieZoe/herdr-picker
+tern plugin install github.com/RookieZoe/tern-plugin-herdr-picker
 ```
 
 Or from a local clone, using it in place while you edit it:
 
 ```sh
-git clone https://github.com/RookieZoe/herdr-picker
-tern plugin link ./herdr-picker
+git clone https://github.com/RookieZoe/tern-plugin-herdr-picker
+tern plugin link ./tern-plugin-herdr-picker
 tern plugin reload herdr-picker
 ```
 
