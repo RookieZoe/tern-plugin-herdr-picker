@@ -4,7 +4,7 @@ Notes from building this plugin against Tern 0.9.29 (`tern --version` → `0.9.2
 herdr-core `hc` 0.1.21. The API reference is the type file Tern generates for a plugin directory:
 
 ```sh
-tern plugin types <dir>   # writes <dir>/tern.d.luau (git-ignored here)
+tern plugin types plugin   # writes plugin/tern.d.luau (git-ignored here)
 ```
 
 Recheck these points after a Tern upgrade; any of them may change.

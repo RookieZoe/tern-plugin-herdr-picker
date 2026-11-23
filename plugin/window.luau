@@ -6,7 +6,7 @@
 --
 -- "Herdr: new space" asks for a folder, starts a shell there with fresh
 -- herdr.space / herdr.tab labels (the Herdr app adopts unknown ids as a new
--- space and tab; see docs/adr/0001), and opens it the same way.
+-- space and tab; see the repo's docs/adr/0001), and opens it the same way.
 
 local TIMEOUT_MS = 8000
 
