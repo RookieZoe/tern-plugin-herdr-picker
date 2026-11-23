@@ -20,6 +20,10 @@ Recheck these points after a Tern upgrade; any of them may change.
   It returns an `Awaitable`; the chosen item comes back in `:next(function(item, err, cx) … end)`,
   `nil` when dismissed. Extra fields on an item ride along to the answer.
 - Typing filters on `label`. Put anything the user should be able to search for in the label.
+- `cx:pick` and `cx:prompt` always open over the focused pane. Neither takes a placement, so a
+  plugin can't centre them in the window; with several splits they sit off-centre. `tern.ui.node`'s
+  `overlay` kind only draws inside a plugin block, and zooming the pane around the picker is a hack
+  that leaves the pane zoomed if anything fails.
 - An unknown icon name raises. The plugin calls `cx:pick` in `pcall` and retries without icons.
   Icon names seen in the Tern binary include `terminal`, `sparkle`, `list`, `server`, `folder` and
   `provider-<name>` brand icons (`provider-anthropic`, `provider-openai`, `provider-github`,
@@ -70,6 +74,33 @@ it. This plugin uses English throughout.
 | `turn` | turn count |
 
 There is no `name` field, despite what an earlier version of this plugin read.
+
+## herdr-core, the Herdr app and spaces
+
+Checked against herdr-app 0.1.17 and hc 0.1.22.
+
+- `herdr` (the TUI, 0.9.x) is a separate, older product with its own server, socket and
+  `session.json`. It shares nothing with herdr-core or the Herdr app; `hc --skill` calls it "the older
+  terminal multiplexer". This plugin doesn't use it.
+- herdr-core runs every terminal. The Herdr app (`herdr-app`) is one client that arranges them into
+  spaces and tabs; this plugin is another client.
+- The layout lives in herdr-core, in an opaque JSON document named `herdr-app` (`doc.get` through
+  `hc connect`): `spaces[] → tabs[] → root → { terminal: "t14" }`. Ids are `sp`/`tb` plus 32 hex
+  digits. Writing it directly would race the app (newest write wins, no merge).
+- Terminals join it through labels: `herdr.space=<id>` and `herdr.tab=<id>`. An id the app doesn't
+  know becomes a new space or tab, named after the folder or repo. The app writes
+  `where="<space> / <tab>"` back onto the terminal, the `where` that `hc ls` shows. Adoption leaves
+  the space the app shows unchanged.
+- `herdr-app do space.new` also makes a space, but only while the app's window is running.
+- Agent status in `hc ls` comes from the program's own OSC 7501 reports, with no per-agent hook.
+
+## Tern APIs the new-space command uses
+
+- `cx:prompt(opts)` asks for one line of text; it resolves with the text, `nil` when dismissed.
+- There is no native file or folder dialog. `tern.fs.list` raises on a file, which tells folders
+  from files. `tern.files.button` can add a button to the Files pane header (unused here).
+- `cx.session:panes()` gives each pane's `cwd` (`""` when unknown); `cx.session:focused()` gives the
+  focused pane number.
 
 ## Testing a plugin
 
