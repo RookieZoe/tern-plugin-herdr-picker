@@ -102,6 +102,36 @@ Checked against herdr-app 0.1.17 and hc 0.1.22.
 - `cx.session:panes()` gives each pane's `cwd` (`""` when unknown); `cx.session:focused()` gives the
   focused pane number.
 
+## Agent-to-agent communication: use herdr-core, not Tern
+
+Neither tool lets agents message each other directly; something (a script, a plugin or an agent
+itself) reads one agent's reply and sends it to another. For that, herdr-core's `hc` is the better
+fit, and Tern is where a person watches and steps in (what this plugin is for). This comes from
+`tern.d.luau`, `tern <cmd> --help` and `hc --help`; an exchange between two live agents hasn't been
+tried yet.
+
+What Tern offers:
+
+- `cx.agents` (window half only): `list()`, `start({prompt, cwd, command})`, `ask(agent, text)`
+  (queued until the agent can take it), `wait(agent)` (resolves with the last reply once idle),
+  `transcript(agent)` (structured chat for Tern's own omp agent only; `{}` for others),
+  `interrupt`, `stop`. With the `agent_finished` window event, a plugin can relay A's reply to B.
+- The CLI, from any Tern pane: `tern send BLOCK text …`, `tern capture BLOCK --scrollback`,
+  `tern wait BLOCK --until idle=MS`, `tern events`. This works on screen text and silence, not on
+  replies.
+- A pane this plugin opens runs `hc attach`, so Tern probably sees `hc`, not an agent, and
+  `cx.agents` may not reach it (unverified).
+
+Why `hc` is the better fit:
+
+- It addresses agents by terminal address or name: `hc send <t> <text>`, `hc read <t>`,
+  `hc wait <t>` (until it stops working, or `--output X`), `hc interrupt <t>`, `hc keys <t> …`.
+- It knows who started whom: an agent starts helpers with `hc run`, waits on them with
+  `hc wait --children`, and herdr-core sends the parent a note when a helper finishes
+  (`notes = false` in `~/.config/herdr-core/config.toml` turns that off).
+- It needs no Tern window or plugin, and reaches other machines with `hc machine`.
+- It treats every agent CLI the same, where Tern reads structured replies from omp only.
+
 ## Testing a plugin
 
 - `tern plugin install <dir> --force` replaces an installed copy; `tern plugin link <dir>` uses the
