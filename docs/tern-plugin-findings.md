@@ -91,6 +91,17 @@ Checked against herdr-app 0.1.17 and hc 0.1.22.
   know becomes a new space or tab, named after the folder or repo. The app writes
   `where="<space> / <tab>"` back onto the terminal, the `where` that `hc ls` shows. Adoption leaves
   the space the app shows unchanged.
+- `hc ls --json` carries no labels. herdr-core's `terminal.list` method does, in one call:
+  `printf '{"jsonrpc":"2.0","id":1,"method":"terminal.list","params":{}}\n' | hc connect --json`
+  (`tern.process.run` passes it as `stdin`). Its terminals have no `agent` or `where` field:
+  `where` is `labels.where`, `status` is `{app, state, msg}`, and `foreground.name` can be a version
+  (`2.1.331` for Claude Code). The plugin joins it to `hc ls` by address rather than derive those.
+  `hc schema` lists every method.
+- Every terminal in a space carries `herdr.space`, but some (made inside the Herdr app) lack
+  `herdr.tab`, so labels don't show the full tab layout. Count tabs by the tab half of `where`.
+- A terminal started with an existing `herdr.space` and a fresh `herdr.tab` joins that space as its
+  next tab. Verified 2026-11-24 with hc 0.1.22 (window open): `where` became `herdr-picker / 2`
+  within a second.
 - `herdr-app do space.new` also makes a space, but only while the app's window is running.
 - Agent status in `hc ls` comes from the program's own OSC 7501 reports, with no per-agent hook.
 

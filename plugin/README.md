@@ -1,16 +1,17 @@
 # Herdr Picker
 
-A Tern plugin for [herdr-core](https://herdr.dev) (`hc`): pick a running herdr-core pane, or start a
-new herdr space, and open it in a Tern split.
+A Tern plugin for [herdr-core](https://herdr.dev) (`hc`): pick a running herdr-core pane, start a
+new herdr space, or add a tab to one, and open it in a Tern split.
 
 ## Usage
 
-The plugin adds two commands to Tern's command palette:
+The plugin adds three commands to Tern's command palette:
 
 | Command | Action name | What it does |
 |---|---|---|
 | **Herdr: pick a pane** | `plugin.herdr-picker.pick` | Lists live herdr-core panes; opens the one you pick |
 | **Herdr: new space** | `plugin.herdr-picker.new-space` | Asks for a folder; starts a new herdr space with a shell there and opens it |
+| **Herdr: new tab** | `plugin.herdr-picker.new-tab` | Asks for a herdr space; adds a tab with a shell to it and opens it |
 
 Open the palette and type `herdr`, or bind an action name to a key in Tern's keymap. Either way the
 pane opens in a split to the right of the focused pane, running `hc attach <address>`. A pane already
@@ -62,10 +63,27 @@ The plugin starts a shell in that folder through `hc` and opens it in a split. T
 it as a new space named after the folder or repo, without switching the space it's showing. To run
 an agent there, start it in the new shell.
 
+### New tab
+
+A picker lists every herdr space that has a live pane, with its tab count and directory, so two
+spaces with the same name can be told apart:
+
+```
+Add a tab to a herdr space…
+
+  ▸  my-app            2 tabs  ·  ~/Codes/my-app
+  ▸  api               1 tab  ·  ~/Codes/api
+```
+
+The plugin starts a shell in the space's first pane's directory and opens it in a split. The Herdr
+app shows it as the space's next tab (`my-app / 3`). A space whose panes have all finished isn't
+listed.
+
 ## Requirements
 
 - Tern with plugin support
-- herdr-core's `hc` CLI, version with `hc ls --json`, `hc attach` and `hc run --label`
+- herdr-core's `hc` CLI, version with `hc ls --json`, `hc connect` (`terminal.list`), `hc attach`
+  and `hc run --label`
 - The Herdr app is optional. Without it a new space's shell still opens in Tern; the space shows up
   once the app runs.
 
@@ -112,7 +130,8 @@ up. If the picker reports that it can't run `hc`, set `HC_BIN` to its full path.
 
 ## How panes are classified
 
-`hc ls --json` reports each pane's foreground program. A pane counts as a terminal when that program
+`hc ls --json` reports each pane's foreground program; herdr-core's `terminal.list` adds the labels
+that say which herdr space it belongs to. A pane counts as a terminal when that program
 is a known shell (`sh`, `bash`, `zsh`, `fish`, `nu`, `pwsh`, `powershell`, `cmd`, …); anything else,
 or any pane that reports an agent status, counts as an agent CLI. Finished panes aren't listed.
 

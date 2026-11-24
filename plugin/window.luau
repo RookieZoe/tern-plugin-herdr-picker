@@ -7,6 +7,13 @@
 -- "Herdr: new space" asks for a folder, starts a shell there with fresh
 -- herdr.space / herdr.tab labels (the Herdr app adopts unknown ids as a new
 -- space and tab; see the repo's docs/adr/0001), and opens it the same way.
+--
+-- "Herdr: new tab" lists the herdr spaces that have a live terminal, starts a
+-- shell under the chosen space's herdr.space label and a fresh herdr.tab, and
+-- opens it the same way.
+--
+-- The terminal list joins `hc ls --json` (program, status, where) with
+-- herdr-core's terminal.list method (labels, hence the space) by address.
 
 local TIMEOUT_MS = 8000
 
@@ -44,6 +51,10 @@ type HcPane = {
 	agent: boolean,
 	status: string?,
 	cwd: string,
+	-- herdr.space label; nil for a terminal no Herdr space holds.
+	space: string?,
+	-- Position in hc's own order, before agents are sorted first.
+	index: number,
 }
 
 local function which(name: string, env: string): string
@@ -97,14 +108,14 @@ end
 
 -- Runs `hc <args>` and hands its stdout to `on_ok`; every failure becomes a
 -- toast that names the subcommand.
-local function run_hc(cx: WindowCx, args: { string }, on_ok: (stdout: string, cx: WindowCx) -> ())
+local function run_hc(cx: WindowCx, args: { string }, on_ok: (stdout: string, cx: WindowCx) -> (), stdin: string?)
 	local argv = { hc_bin() }
 	for _, a in args do
 		table.insert(argv, a)
 	end
 	local what = "hc " .. args[1]
 	local ok, spawn_err = pcall(tern.process.run, argv,
-		{ timeout_ms = TIMEOUT_MS, env = { NO_COLOR = "1" } },
+		{ timeout_ms = TIMEOUT_MS, env = { NO_COLOR = "1" }, stdin = stdin },
 		function(r: ProcessResult, cx2: WindowCx?)
 			local wcx = cx2 or cx
 			if r.timed_out then
@@ -188,21 +199,78 @@ local function parse(stdout: string): ({ HcPane }?, string?)
 				agent = type(status) == "string" or (program ~= "" and not SHELLS[program]),
 				status = if type(status) == "string" then status else nil,
 				cwd = if type(r.cwd) == "string" then r.cwd else "",
+				index = #out + 1,
 			})
 		end
 	end
 	-- Agents first, then terminals; within a group keep hc's order.
-	local order: { [HcPane]: number } = {}
-	for i, p in out do
-		order[p] = i
-	end
 	table.sort(out, function(a, b)
 		if a.agent ~= b.agent then
 			return a.agent
 		end
-		return order[a] < order[b]
+		return a.index < b.index
 	end)
 	return out, nil
+end
+
+-- address → herdr.space, from a terminal.list reply.
+local function parse_spaces(stdout: string): ({ [string]: string }?, string?)
+	local ok, doc = pcall(tern.json.decode, first_line(stdout))
+	if not ok or type(doc) ~= "table" then
+		return nil, "could not read hc connect output"
+	end
+	if type(doc.error) == "table" then
+		return nil, "terminal.list: " .. tostring(doc.error.message)
+	end
+	local result = doc.result
+	if type(result) ~= "table" or type(result.terminals) ~= "table" then
+		return nil, "could not read hc connect output"
+	end
+	local out: { [string]: string } = {}
+	for _, r in result.terminals do
+		if type(r) == "table" and type(r.address) == "string" and type(r.labels) == "table" then
+			local space = r.labels["herdr.space"]
+			if type(space) == "string" and space ~= "" then
+				out[r.address] = space
+			end
+		end
+	end
+	return out, nil
+end
+
+-- Runs `hc ls --json` and terminal.list side by side and hands `on_ok` the
+-- live terminals, each with its space. hc ls leads: a terminal that
+-- terminal.list doesn't report (started between the two calls) has no space.
+local function list_terminals(cx: WindowCx, on_ok: (panes: { HcPane }, cx: WindowCx) -> ())
+	local ls_out: string? = nil
+	local spaces_out: string? = nil
+	local function done(wcx: WindowCx)
+		if not ls_out or not spaces_out then
+			return
+		end
+		local panes, err = parse(ls_out)
+		if not panes then
+			wcx:toast("error", "Herdr Picker", err)
+			return
+		end
+		local spaces, err2 = parse_spaces(spaces_out)
+		if not spaces then
+			wcx:toast("error", "Herdr Picker", err2)
+			return
+		end
+		for _, p in panes do
+			p.space = spaces[p.address]
+		end
+		on_ok(panes, wcx)
+	end
+	run_hc(cx, { "ls", "--json" }, function(stdout, wcx)
+		ls_out = stdout
+		done(wcx)
+	end)
+	run_hc(cx, { "connect", "--json" }, function(stdout, wcx)
+		spaces_out = stdout
+		done(wcx)
+	end, '{"jsonrpc":"2.0","id":1,"method":"terminal.list","params":{}}\n')
 end
 
 -- Focuses the split already showing `address` in this window, or opens one.
@@ -310,12 +378,7 @@ tern.command({
 	title = "Herdr: pick a pane",
 	icon = "terminal",
 	run = function(cx)
-		run_hc(cx, { "ls", "--json" }, function(stdout, wcx)
-			local panes, err = parse(stdout)
-			if not panes then
-				wcx:toast("error", "Herdr Picker", err)
-				return
-			end
+		list_terminals(cx, function(panes, wcx)
 			if #panes == 0 then
 				wcx:toast("info", "No running herdr-core panes")
 				return
@@ -397,16 +460,15 @@ local function focused_cwd(cx: WindowCx): string
 	return tern.getenv("HOME") or tern.getenv("USERPROFILE") or "/"
 end
 
--- Starts a shell in `dir` under a Space and Tab the Herdr app doesn't know
--- yet, then opens it in a split.
-local function create_space(cx: WindowCx, dir: string)
+-- Starts a shell in `dir` under `space` and a Tab the Herdr app doesn't know
+-- yet, then opens it in a split. A fresh `space` id makes a new Space.
+local function start_shell(cx: WindowCx, dir: string, space: string)
 	local args = {
 		"run", "--bg", "--keep", "--no-parent", "--json",
 		"--cwd", dir,
-		"--label", "herdr.space=" .. new_id("sp"),
+		"--label", "herdr.space=" .. space,
 		"--label", "herdr.tab=" .. new_id("tb"),
 	}
-	tern.log.info("herdr-picker: new space", dir)
 	run_hc(cx, args, function(stdout, wcx)
 		local ok, doc = pcall(tern.json.decode, stdout)
 		if not ok or type(doc) ~= "table" or type(doc.address) ~= "string" then
@@ -415,6 +477,11 @@ local function create_space(cx: WindowCx, dir: string)
 		end
 		open_pane(wcx, doc.address, dir)
 	end)
+end
+
+local function create_space(cx: WindowCx, dir: string)
+	tern.log.info("herdr-picker: new space", dir)
+	start_shell(cx, dir, new_id("sp"))
 end
 
 local function type_path(cx: WindowCx, dir: string)
@@ -507,5 +574,116 @@ tern.command({
 	icon = "folder",
 	run = function(cx)
 		browse(cx, focused_cwd(cx))
+	end,
+})
+
+-- New tab -------------------------------------------------------------------
+
+type Space = {
+	id: string,
+	name: string,
+	-- The first terminal's directory (in hc's order), where a new tab starts.
+	cwd: string,
+	tabs: number,
+}
+
+-- "my-app / 2" → "my-app", "2"; the last " / " splits, as tab names are short.
+local function split_where(where: string): (string, string?)
+	local space, tab = string.match(where, "^(.*) / (.-)$")
+	if space then
+		return space, tab
+	end
+	return where, nil
+end
+
+-- Spaces in the order their first terminal appears in `hc ls`.
+local function group_spaces(panes: { HcPane }): { Space }
+	local ls_order = table.clone(panes)
+	table.sort(ls_order, function(a, b)
+		return a.index < b.index
+	end)
+	local out: { Space } = {}
+	local by_id: { [string]: Space } = {}
+	local tab_seen: { [string]: { [string]: boolean } } = {}
+	for _, p in ls_order do
+		local id = p.space
+		if id then
+			local space_name, tab = split_where(p.where)
+			local s = by_id[id]
+			if not s then
+				s = { id = id, name = space_name, cwd = p.cwd, tabs = 0 }
+				by_id[id] = s
+				tab_seen[id] = {}
+				table.insert(out, s)
+			end
+			if s.cwd == "" then
+				s.cwd = p.cwd
+			end
+			local key = tab or p.address
+			if not tab_seen[id][key] then
+				tab_seen[id][key] = true
+				s.tabs += 1
+			end
+		end
+	end
+	return out
+end
+
+local function show_spaces(cx: WindowCx, spaces: { Space })
+	local function items(with_icons: boolean): { PickItem }
+		local out: { PickItem } = {}
+		for _, s in spaces do
+			local bits = { if s.tabs == 1 then "1 tab" else s.tabs .. " tabs" }
+			if s.cwd ~= "" then
+				table.insert(bits, short_path(s.cwd))
+			end
+			local item: PickItem = {
+				label = s.name,
+				detail = table.concat(bits, "  ·  "),
+				space = s.id,
+				cwd = s.cwd,
+			}
+			if with_icons then
+				item.icon = "folder"
+			end
+			table.insert(out, item)
+		end
+		return out
+	end
+
+	local opts: PickOptions = {
+		items = {},
+		placeholder = "Add a tab to a herdr space…",
+		icon = "folder",
+		action = "add tab",
+	}
+	pick(cx, opts, items):next(function(item, err, cx2)
+		local wcx = cx2 or cx
+		if err then
+			wcx:toast("error", "Herdr: new tab", err)
+			return
+		end
+		if not item or type(item.space) ~= "string" then
+			return
+		end
+		local dir = if type(item.cwd) == "string" and item.cwd ~= "" then item.cwd else focused_cwd(wcx)
+		tern.log.info("herdr-picker: new tab", item.space, dir)
+		start_shell(wcx, dir, item.space)
+	end)
+end
+
+tern.command({
+	id = "new-tab",
+	title = "Herdr: new tab",
+	icon = "folder",
+	run = function(cx)
+		list_terminals(cx, function(panes, wcx)
+			local spaces = group_spaces(panes)
+			if #spaces == 0 then
+				wcx:toast("info", "No herdr spaces with a live terminal")
+				return
+			end
+			show_spaces(wcx, spaces)
+		end)
 	end,
 })
