@@ -36,7 +36,8 @@ Recheck these points after a Tern upgrade; any of them may change.
 - `tern.process.run` in the window half runs on the window's machine. So a window-half picker that
   calls `hc ls` lists the local herdr-core panes only. Listing a remote host's panes needs the host
   half, through a plugin block (`tern.block.define`), opened with `cx:new_block("<plugin>.<block>")`.
-  This plugin dropped its block in 0.3.0 and lists local panes only.
+  This plugin has only ever had a window half (no `host.luau` exists in its git history) and lists
+  local panes only.
 - Every block a manifest declares in `[[blocks]]` also gets a "New … block" row in the palette under
   Plugins (`palette: true` in `tern plugin list --json`). Removing the block removes the row.
 - `cx.layout:split(target, "right", { command = …, cwd = … })` opens a terminal split running a shell
@@ -44,6 +45,41 @@ Recheck these points after a Tern upgrade; any of them may change.
   focus it again. `tern.kv` persists the address → pane mapping between commands.
 - `tern.getenv`, `tern.fs`, `tern.kv`, `tern.json`, `tern.log` and `tern.timer` work in both halves.
   `tern.runtime.os` is `"macos"`, `"linux"`, `"windows"` or `"ios"`.
+
+## Host-half blocks
+
+Checked on desktop with Tern 0.9.32 and a throwaway plugin (2026-11-24). Full notes are on the
+`research/host-half-block` branch.
+
+- The session daemon's `PATH` is `/usr/bin:/bin:/usr/sbin:/sbin`, and `TERN_EXE` is unset. A bare
+  `{"hc", …}` in `tern.process.run` raises and aborts the handler, so call `hc` and `tern` by
+  absolute path, inside `pcall`, with `timeout_ms`.
+- Starting a process doesn't count toward the host half's 2 s Lua budget per call; one call may take
+  at most 20 s of wall time.
+- A block can't become a terminal, and `BlockCx` has no layout API. To open a pane from a block, the
+  host half runs `tern split <cx.pane> right --window <ev.window> --json -- <cmd>`, then
+  `cx:exit(0)` closes the block. `--window` must follow the subcommand; before it, the call fails.
+  Alternatively `cx:open("tern-<plugin>:…")` reaches the window half's `tern.route.link`, which can
+  call `cx.layout:split`.
+- Only the window half opens a block with launch args (`cx:new_block(kind, args)`, `Launch`,
+  `RouteDecision`). The palette's "New … block" row passes `args = []`.
+- Block lists (`tern.ui.list`) have no `group` field and blocks have no built-in filter.
+- `window_start` runs once per window for the window's whole life, not again after
+  `tern plugin reload` or unlink + link. A top-level `tern.timer` in the window half gets a fresh
+  `cx` on each load; with `cx.session:event` and `cx:action("block:<plugin>.<block>")` it can drive a
+  block in tests.
+
+## iOS
+
+From Tern's docs (Architecture, Support Matrix) and the 0.9.32 changelog; details on the
+`research/tern-ios-plugins` branch.
+
+- The phone runs window halves only, from its own folder (Files › On My iPhone › Tern › Plugins),
+  without JIT. A `window.luau` installed on the Mac doesn't run there. The Mac's daemon still runs the
+  Mac's `host.luau` for Mac panes the phone opens.
+- `tern.process.run` raises on iOS; `tern.fetch` works. The phone's `tern.fs` sees only the phone.
+- The New (+) sheet is per host: a folder picker, a New tab / In tab toggle, and a "Workspace blocks"
+  list of block kinds.
 
 ## Internationalization
 
