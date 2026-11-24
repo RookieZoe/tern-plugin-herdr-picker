@@ -133,8 +133,9 @@ Why `hc` is the better fit:
 
 ### Verified behaviour
 
-Checked on 2026-11-24 with hc 0.1.22 and Claude Code 2.1.331 (haiku). The script is on branch
-`prototype/hc-agent-comm` (`prototypes/hc-agent-comm/run.zsh`); all 6 checks passed.
+Checked on 2026-11-24 with hc 0.1.22 and Claude Code 2.1.331 (haiku), by a throwaway script that
+started every terminal as `proto-*` with `--no-parent` and removed them afterwards; all 6 checks
+passed. The script wasn't kept.
 
 1. A plain shell: `hc send` types a line, `hc wait <t> --output X` ends when X is printed,
    `hc read` returns the screen.
