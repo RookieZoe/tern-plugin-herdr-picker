@@ -106,9 +106,9 @@ Checked against herdr-app 0.1.17 and hc 0.1.22.
 
 Neither tool lets agents message each other directly; something (a script, a plugin or an agent
 itself) reads one agent's reply and sends it to another. For that, herdr-core's `hc` is the better
-fit, and Tern is where a person watches and steps in (what this plugin is for). This comes from
-`tern.d.luau`, `tern <cmd> --help` and `hc --help`; an exchange between two live agents hasn't been
-tried yet.
+fit, and Tern is where a person watches and steps in (what this plugin is for). The Tern side comes
+from `tern.d.luau` and `tern <cmd> --help`; the `hc` side was verified with live Claude Code agents
+(see below).
 
 What Tern offers:
 
@@ -126,11 +126,41 @@ Why `hc` is the better fit:
 
 - It addresses agents by terminal address or name: `hc send <t> <text>`, `hc read <t>`,
   `hc wait <t>` (until it stops working, or `--output X`), `hc interrupt <t>`, `hc keys <t> …`.
-- It knows who started whom: an agent starts helpers with `hc run`, waits on them with
-  `hc wait --children`, and herdr-core sends the parent a note when a helper finishes
-  (`notes = false` in `~/.config/herdr-core/config.toml` turns that off).
+- It knows who started whom: a terminal an agent starts with `hc run` records that agent as its
+  `parent` (`hc get <t> --json`), and the parent can wait on it with `hc wait --children`.
 - It needs no Tern window or plugin, and reaches other machines with `hc machine`.
 - It treats every agent CLI the same, where Tern reads structured replies from omp only.
+
+### Verified behaviour
+
+Checked on 2026-11-24 with hc 0.1.22 and Claude Code 2.1.331 (haiku). The script is on branch
+`prototype/hc-agent-comm` (`prototypes/hc-agent-comm/run.zsh`); all 6 checks passed.
+
+1. A plain shell: `hc send` types a line, `hc wait <t> --output X` ends when X is printed,
+   `hc read` returns the screen.
+2. Script ↔ agent: `hc send <t> --wait "…"` returns when the agent's turn ends (status `idle` →
+   `done`, `turn` 0 → 1), and `hc read` shows the reply. The message reaches the agent wrapped as
+   `<hc from="t3b">…</hc>`, naming the sender's terminal.
+3. Agent → child agent: a parent agent ran `hc run --bg --name proto-child claude …`,
+   `hc wait --children all`, `hc read proto-child`, and relayed the child's answer. The child's
+   `parent` field held the parent's address.
+4. Child → parent: a child that runs `hc send <parent> "…"` lands in the parent's input as
+   `<hc from="t3w proto-reporter">REPORT=64</hc>`. Killing the child put
+   `<hc>t3w proto-reporter exited (exit 129). Read: hc read t3w</hc>` into the parent's input, and
+   the parent went to read it on its own.
+
+What the docs alone got wrong:
+
+- hc does **not** note the parent when a child agent merely finishes a turn. A child is expected to
+  report with `hc send <parent>`; hc notes the parent only when a child can't (blocked, error,
+  exited), per `hc --skill`. `--no-notify` and `notes = false` in
+  `~/.config/herdr-core/config.toml` turn those notes off.
+- Sends from a terminal count as from that terminal even with `--no-parent`: a script run inside an
+  hc terminal is still `from="<its address>"`.
+- `claude --allowedTools 'Bash(hc:*)' "prompt"` swallows the prompt as another tool name. Put `--`
+  before the prompt, or start the agent bare and `hc send` the task once it reports `idle`.
+- Start helpers with `--no-parent` when the caller is itself an agent in an hc terminal, or their
+  exit notes are typed into the caller.
 
 ## Testing a plugin
 
