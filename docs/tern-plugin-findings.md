@@ -79,7 +79,23 @@ From Tern's docs (Architecture, Support Matrix) and the 0.9.32 changelog; detail
   Mac's `host.luau` for Mac panes the phone opens.
 - `tern.process.run` raises on iOS; `tern.fetch` works. The phone's `tern.fs` sees only the phone.
 - The New (+) sheet is per host: a folder picker, a New tab / In tab toggle, and a "Workspace blocks"
-  list of block kinds.
+  list of native block kinds only.
+
+Checked on a real iPhone (Tern iOS 0.9.27, the latest; Mac on 0.9.32) with a throwaway probe plugin,
+2026-11-24 (issue #7):
+
+- The New sheet lists no plugin blocks, on the phone or on the Mac's +, even with `palette = true`.
+  The phone's drawer search pill (its stand-in for the palette) finds a host's "New … block" rows and
+  a phone-installed window half's `tern.command` rows.
+- A host-half block opened from the phone gets `args = []` and the focused pane's folder as
+  `cx.cwd`. Its `hc` calls run on the Mac. Route A (`tern split <cx.pane> right -- hc attach …`, then
+  `cx:exit(0)`) shows the new pane on every window of the session, the phone included. Phone events
+  carry `window = ""`.
+- The phone's keyboard reaches the block's `key` hook. A tapped `input` node took focus but showed
+  no text and sent no `edit` events.
+- A window half in Files › Tern › Plugins reloads a few seconds after its file changes. On the phone,
+  `cx:pick` (groups, icons), `cx:prompt` and `cx.layout:split` with a command (run on the Mac) work.
+  An unknown icon name doesn't raise there. `tern.kv` is per device.
 
 ## Internationalization
 
