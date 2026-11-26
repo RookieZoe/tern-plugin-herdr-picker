@@ -1,7 +1,7 @@
 # Herdr Picker
 
-A Tern plugin for [herdr-core](https://herdr.dev) (`hc`): pick a running herdr-core pane, or start a
-new herdr space, and open it in a Tern split.
+A Tern plugin for [herdr-core](https://herdr.dev) (`hc`): pick a running herdr-core pane, start a
+new herdr space, or add a tab to one, and open it in a Tern block.
 
 ```sh
 tern plugin install github.com/RookieZoe/tern-plugin-herdr-picker/plugin

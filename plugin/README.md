@@ -1,72 +1,83 @@
 # Herdr Picker
 
 A Tern plugin for [herdr-core](https://herdr.dev) (`hc`): pick a running herdr-core pane, start a
-new herdr space, or add a tab to one, and open it in a Tern split.
+new herdr space, or add a tab to one, and open it in a Tern block.
 
 ## Usage
 
-The plugin adds three commands to Tern's command palette:
+Press **⌘⇧H** to open the Herdr block below the pane you're in, or **⌘⌥H** to open it on its right
+(Ctrl+Shift+H and Ctrl+Alt+H on Windows and Linux), or run either command from the palette. The
+block offers **Open a pane**, **New space** and **New tab**; each goes on in the same block, and Esc
+goes back a step, or closes the block from the first one.
 
-| Command | Action name | What it does |
+| Command | Default key | Action name |
 |---|---|---|
-| **Herdr: pick a pane** | `plugin.herdr-picker.pick` | Lists live herdr-core panes; opens the one you pick |
-| **Herdr: new space** | `plugin.herdr-picker.new-space` | Asks for a folder; starts a new herdr space with a shell there and opens it |
-| **Herdr: new tab** | `plugin.herdr-picker.new-tab` | Asks for a herdr space; adds a tab with a shell to it and opens it |
+| **Herdr: open below** | ⌘⇧H | `plugin.herdr-picker.open` |
+| **Herdr: open right** | ⌘⌥H | `plugin.herdr-picker.open-right` |
 
-Open the palette and type `herdr`, or bind an action name to a key in Tern's keymap. Either way the
-pane opens in a split to the right of the focused pane, running `hc attach <address>`. A pane already
-open in this window shows a check in the picker, and picking it again focuses that split instead of
-opening another.
+To change a key, map its action name in the `keybinds` of Tern's `settings.json`; an empty list
+(`"cmd+shift+h": []`) turns a key off.
 
-The picker and the folder browser open over the focused pane, not the middle of the window; Tern
-offers plugins no other placement.
+The pane you end up with, running `hc attach <address>`, takes the block's place. On macOS and
+Linux, closing it doesn't ask whether to end `hc`; on Windows it still asks. Either way, closing only
+detaches: the herdr-core terminal keeps running.
 
-### Pick a pane
+### Open a pane
 
-Tern's own picker opens with every live herdr-core pane, split into two groups:
+Every live herdr-core pane, with tabs to narrow them down: **All**, **Agents** and **Terminals**
+(←/→ or Tab to switch). In each tab the panes are a tree by herdr space: a space with several panes
+is a row of its own, with its tabs under it, agents and plain shells together; a space with one pane
+is a single row. ↵ on a space folds or unfolds it; a search keeps every match unfolded.
 
-- **Agent CLIs**: panes running an agent such as `claude-code` or `codex`, with its status
-  (working, needs input, done, idle) and directory.
-- **Terminals**: plain shells (`zsh`, `bash`, `pwsh`, `cmd`…), with the shell and directory.
+- **Agent CLIs**, such as `claude-code` or `codex`, show their logo, status (working, needs input,
+  done, idle) and directory.
+- **Terminals**, plain shells (`zsh`, `bash`, `pwsh`, `cmd`…), show the shell and directory.
 
 Type to filter, ↑/↓ to move, ↵ to attach.
 
 ```
 Find a herdr-core pane…
+ All 13   Agents 4   Terminals 9
 
-Agent CLIs
-  ✦  my-app / 2      claude-code  ·  done  ·  ~/Codes/my-app
-  ✦  api / 1         codex  ·  working  ·  ~/Codes/api
-Terminals
-  >_ my-app / 1      terminal · zsh  ·  ~/Codes/my-app
+  ▾ ▸  media-xray-oss         3 panes  ·  ~/Codes/AI/media-xray
+    │ ✳  Tab 1     done       claude-code
+    │ >_ Tab 2                zsh
+    │ >_ Tab 3                zsh
+  ✦  api / 1       working    codex  ·  ~/Codes/api
+  >_ my-app / 1               zsh  ·  ~/Codes/my-app
+                                                 Close   Open
 ```
+
+A pane already attached in a Tern block, by this plugin or not, shows a check. Picking it closes the
+Herdr block and focuses that block instead of attaching again.
 
 ### New space
 
-A folder browser opens at the focused pane's directory:
+A folder browser opens at the pane's directory:
 
 ```
-New herdr space in ~/Codes
+New space  ~/Codes
+Filter folders, or type a path…
 
-  >_ Use ~/Codes          new space here
+  >_ Use ~/Codes          start the new space here
   ▸  ..                   ~
   ▸  api/
   ▸  my-app/
-  ☰  Type a path…
+                                Back   Create here   Choose
 ```
 
-Pick a subfolder or `..` to move, **Use …** to create the space there, or **Type a path…** to enter
-one (`~` works). Folders starting with `.` aren't listed; type their path instead. Esc creates
-nothing.
+↵ on a folder goes into it, Backspace (with nothing typed) goes up, and **Use …** or **Create here**
+(⌘↵) starts the space there. Type to filter the folders, or type a path starting with `/` or `~` to
+jump to it. Folders starting with `.` aren't listed; type their path instead.
 
-The plugin starts a shell in that folder through `hc` and opens it in a split. The Herdr app shows
+The plugin starts a shell in that folder through `hc` and opens it in the block's place. The Herdr app shows
 it as a new space named after the folder or repo, without switching the space it's showing. To run
 an agent there, start it in the new shell.
 
 ### New tab
 
-A picker lists every herdr space that has a live pane, with its tab count and directory, so two
-spaces with the same name can be told apart:
+Every herdr space that has a live pane, with its tab count and directory, so two spaces with the same
+name can be told apart:
 
 ```
 Add a tab to a herdr space…
@@ -75,9 +86,15 @@ Add a tab to a herdr space…
   ▸  api               1 tab  ·  ~/Codes/api
 ```
 
-The plugin starts a shell in the space's first pane's directory and opens it in a split. The Herdr
+The plugin starts a shell in the space's first pane's directory and opens it in the block's place. The Herdr
 app shows it as the space's next tab (`my-app / 3`). A space whose panes have all finished isn't
 listed.
+
+### Remote hosts and the phone
+
+The block runs on the host the session belongs to, so in a window attached to a remote Tern host it
+lists that host's herdr-core panes and browses that host's folders. Install the plugin on that host.
+On Tern for iOS, open it from the drawer's search: **New Herdr block**.
 
 ## Requirements
 
@@ -115,18 +132,22 @@ tern plugin link ./tern-plugin-herdr-picker/plugin
 tern plugin reload herdr-picker
 ```
 
-## Finding `hc`
+## Finding `hc` and `tern`
 
-The plugin looks for `hc` in this order:
+The block runs in Tern's session daemon, whose `PATH` is the system default, so the plugin looks for
+`hc` in this order:
 
 1. The `HC_BIN` environment variable
 2. `~/.local/bin/hc`
-3. `%LOCALAPPDATA%\Programs\herdr-core\hc.exe` or `%LOCALAPPDATA%\Programs\herdr-app\hc.exe` (Windows)
-4. `/opt/homebrew/bin/hc`, `/usr/local/bin/hc`
-5. `hc` on `PATH`
+3. `/opt/homebrew/bin/hc`, `/usr/local/bin/hc`
+4. `%LOCALAPPDATA%\Programs\herdr-core\hc.exe` or `%LOCALAPPDATA%\Programs\herdr-app\hc.exe` (Windows)
+5. `hc` on `PATH` (Windows only)
 
-Tern started from the Dock, Start menu or a desktop launcher may not see the `PATH` your shell sets
-up. If the picker reports that it can't run `hc`, set `HC_BIN` to its full path.
+If the block says it can't find `hc`, set `HC_BIN` to its full path where the daemon starts.
+
+It opens panes with the `tern` CLI (`TERN_EXE`, then `/Applications/Tern.app`, `~/.local/bin`,
+`/usr/local/bin`, `/usr/bin`, `%LOCALAPPDATA%\Programs\Tern`). Without one, the window opens the
+pane instead.
 
 ## How panes are classified
 
@@ -137,12 +158,7 @@ or any pane that reports an agent status, counts as an agent CLI. Finished panes
 
 ## Limitations
 
-- The plugin lists the herdr-core panes of the machine the Tern window runs on. Panes of a remote
-  Tern host aren't listed.
-- Tern plugins can't add a category to the command palette, so the list opens as its own picker
-  rather than as a palette tab.
-- The picker, folder browser and path field open over the focused pane. Tern's `cx:pick` and
-  `cx:prompt` take no placement, so they can't be centred in the window.
+- Tern plugins can't add a category to the command palette, so the plugin opens its own block.
 - New spaces get Herdr's automatic name; naming one needs the Herdr app (rename it there).
 
 ## License

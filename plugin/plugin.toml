@@ -1,7 +1,13 @@
 schema = 1
 id = "herdr-picker"
 name = "Herdr Picker"
-version = "0.5.0"
-description = "Pick a herdr-core pane, start a new herdr space, or add a tab to one, and open it in a Tern split."
+version = "0.5.1"
+description = "Pick a herdr-core pane, start a new herdr space, or add a tab to one, and open it in a Tern block."
 icon = "terminal"
 window = "window.luau"
+host = "host.luau"
+
+[[blocks]]
+id = "herdr"
+title = "Herdr"
+icon = "terminal"

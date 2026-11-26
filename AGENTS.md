@@ -1,6 +1,6 @@
 # Herdr Picker
 
-A Tern plugin (Luau, window half only) that lists herdr-core panes in Tern's picker and opens the chosen one in a split, starts new herdr spaces, and adds tabs to existing ones. The package Tern installs is `plugin/` (`plugin.toml`, `window.luau`, its README and LICENSE); keep everything else outside it. `tern plugin types plugin` writes the API types. Tern plugin API findings and gotchas: `docs/tern-plugin-findings.md`.
+A Tern plugin (Luau) that opens a Herdr block in a split: there the user picks a herdr-core pane, starts a new herdr space, or adds a tab to one, and the chosen pane, running `hc attach`, takes the block's place. `host.luau` draws the block in the session daemon; `window.luau` holds the commands and keys and a link-route fallback. The package Tern installs is `plugin/` (`plugin.toml`, `window.luau`, `host.luau`, its README and LICENSE); keep everything else outside it. `tern plugin types plugin` writes the API types. Tern plugin API findings and gotchas: `docs/tern-plugin-findings.md`.
 
 ## Agent skills
 
