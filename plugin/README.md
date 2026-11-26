@@ -8,7 +8,8 @@ new herdr space, or add a tab to one, and open it in a Tern block.
 Press **⌘⇧H** to open the Herdr block below the pane you're in, or **⌘⌥H** to open it on its right
 (Ctrl+Shift+H and Ctrl+Alt+H on Windows and Linux), or run either command from the palette. The
 block offers **Open a pane**, **New space** and **New tab**; each goes on in the same block, and Esc
-goes back a step, or closes the block from the first one.
+goes back a step, or closes the block from the first one. In a short block the sheet fills the
+block instead of floating in it like the palette.
 
 | Command | Default key | Action name |
 |---|---|---|
@@ -33,7 +34,7 @@ is a single row. ↵ on a space folds or unfolds it; a search keeps every match 
   done, idle) and directory.
 - **Terminals**, plain shells (`zsh`, `bash`, `pwsh`, `cmd`…), show the shell and directory.
 
-Type to filter, ↑/↓ to move, ↵ to attach.
+Type to filter, ↑/↓ to move (they wrap around at either end), ↵ to attach.
 
 ```
 Find a herdr-core pane…

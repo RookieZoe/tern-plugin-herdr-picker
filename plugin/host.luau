@@ -991,6 +991,11 @@ local function count_panes(s: State, agents: boolean?): number
 	return n
 end
 
+-- Below this many rows the palette-sized sheet ("md": 72px down from the
+-- top, chrome around a short list) leaves room for a row or two, so the
+-- sheet fills the block instead ("screen").
+local SMALL_ROWS = 28
+
 local function sheet(s: State): Node
 	local spec = SHEET[s.mode] or SHEET.home
 	local rows = rows_of(s)
@@ -1020,7 +1025,9 @@ local function sheet(s: State): Node
 	end
 	local props: { [string]: any } = {
 		key = "sheet-" .. s.mode,
-		size = "md",
+		size = if s.cx.rows < SMALL_ROWS then "screen" else "md",
+		-- "screen" defaults to a preview pane; there is nothing to preview.
+		preview = "none",
 		icon = spec.icon,
 		placeholder = spec.placeholder,
 		noun = spec.noun,
@@ -1123,10 +1130,12 @@ tern.block.define("herdr", {
 		local name = key.name
 		if name == "escape" then
 			back(s)
-		elseif name == "up" then
-			s.sel = math.max(1, s.sel - 1)
-		elseif name == "down" then
-			s.sel = math.min(math.max(#rows_of(s), 1), s.sel + 1)
+		elseif name == "up" or name == "down" then
+			-- Wraps around at either end.
+			local n = #rows_of(s)
+			if n > 0 then
+				s.sel = (s.sel - 1 + (if name == "up" then -1 else 1)) % n + 1
+			end
 		elseif name == "pageup" or name == "home" then
 			s.sel = 1
 		elseif name == "pagedown" or name == "end" then
