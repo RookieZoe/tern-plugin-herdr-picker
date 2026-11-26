@@ -145,6 +145,10 @@ From Tern's docs (UI nodes › picker) and checked in a host-half block on Tern 
   for keys. A plugin key that the defaults or preset already bind is dropped with a
   "plugin bind left out" warning in the log. `cmd` on Windows and Linux is the Windows/Super key, so
   the plugin uses `ctrl` there.
+- Tern's Linux/Windows preset binds `ctrl+shift+h`, so 0.5.2's Ctrl+Shift+H for "open below" was
+  dropped there (the Linux daemon log: `plugin bind left out: the preset binds these keys
+  keys="ctrl+shift+h"`). `ctrl+alt+h` and `ctrl+alt+shift+h` are free in 0.9.35's preset (its
+  default chords are in the binary's strings as `pc:…` / `apple:…`); 0.5.3 uses them.
 
 ## Randomness
 
@@ -182,6 +186,35 @@ Checked on a real iPhone (Tern iOS 0.9.27, the latest; Mac on 0.9.32) with a thr
 - A window half in Files › Tern › Plugins reloads a few seconds after its file changes. On the phone,
   `cx:pick` (groups, icons), `cx:prompt` and `cx.layout:split` with a command (run on the Mac) work.
   An unknown icon name doesn't raise there. `tern.kv` is per device.
+
+## Remote hosts
+
+From Tern's docs (Distribution, Window API) and checked on two machines, 2026-11-26 (issue #11): a
+Mac Tern 0.9.35 window attached to a Debian host (Tern 0.9.35, hc 0.1.17), herdr-picker 0.5.2 on
+each. Research notes are on the `research/tern-remote-install` branch.
+
+- A plugin with both halves needs installing on both machines. The client's copy gives the
+  `tern.command` keys and the link route; the host's gives the block and its "New … block" palette
+  row. With only the client's, the keys' `cx:new_block` returns nil (the plugin toasts "isn't
+  installed on this host") and the palette has no block row. With only the host's, the palette row
+  works end to end and the keys do nothing. Tern doesn't compare the two copies' versions.
+- The host-half block runs `hc` on the host, so it lists and opens the host's herdr-core panes.
+  `tern split` / `tern focus` run by the host's daemon (`--window ""`) reached the remote client's
+  window, even with a local window on the host that also has key `""`; a local window showing the
+  same session changed along with it. A macOS client honoured OSC 7501 `state=idle` from a Linux
+  host: closing the attached pane didn't ask.
+- `cx.layout:split(…, { command = … })` in the client's window half runs the command on the host.
+  So a window half that builds a program path from the client's `HOME` / `tern.fs` (as 0.5.2's
+  link-route fallback did for `hc`) gets a path the host may not have: the pane ended with exit
+  127. 0.5.3 has the host half put its own `hc` path in the link. A `cx:open("tern-<plugin>:…")`
+  from the host with no window half on the client does nothing visible.
+- Pane ids differ between the host and a window attached to it, so a host-half pane id handed to the
+  window half (0.5.2's link `target`) can name an unrelated local pane. The window half can find a
+  plugin block without ids: `cx.session:panes()` gives each pane's plugin-qualified kind in `block`
+  (`"herdr-picker.herdr"`), and `link.pane` is the pane the link came from.
+- `cx:new_block(kind, args, "beside", …)` raises "no focused pane to open beside" in a session with
+  no blocks (seen on a remote host's empty session). Check `cx.session:focused()` first and open it
+  with `"tab"` instead.
 
 ## Internationalization
 

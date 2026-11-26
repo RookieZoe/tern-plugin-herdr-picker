@@ -6,15 +6,18 @@ new herdr space, or add a tab to one, and open it in a Tern block.
 ## Usage
 
 Press **⌘⇧H** to open the Herdr block below the pane you're in, or **⌘⌥H** to open it on its right
-(Ctrl+Shift+H and Ctrl+Alt+H on Windows and Linux), or run either command from the palette. The
-block offers **Open a pane**, **New space** and **New tab**; each goes on in the same block, and Esc
-goes back a step, or closes the block from the first one. In a short block the sheet fills the
-block instead of floating in it like the palette.
+(**Ctrl+Alt+H** and **Ctrl+Alt+Shift+H** on Linux and Windows), or run either command from the
+palette. In a session with no blocks yet, either key opens it in a tab of its own. The block offers
+**Open a pane**, **New space** and **New tab**; each goes on in the same block, and Esc goes back a
+step, or closes the block from the first one. In a short block the sheet fills the block instead of
+floating in it like the palette.
 
-| Command | Default key | Action name |
-|---|---|---|
-| **Herdr: open below** | ⌘⇧H | `plugin.herdr-picker.open` |
-| **Herdr: open right** | ⌘⌥H | `plugin.herdr-picker.open-right` |
+| Command | macOS | Linux, Windows | Action name |
+|---|---|---|---|
+| **Herdr: open below** | ⌘⇧H | Ctrl+Alt+H | `plugin.herdr-picker.open` |
+| **Herdr: open right** | ⌘⌥H | Ctrl+Alt+Shift+H | `plugin.herdr-picker.open-right` |
+
+Linux and Windows don't get Ctrl+Shift+H because Tern's own keys already use it there.
 
 To change a key, map its action name in the `keybinds` of Tern's `settings.json`; an empty list
 (`"cmd+shift+h": []`) turns a key off.
@@ -93,9 +96,29 @@ listed.
 
 ### Remote hosts and the phone
 
-The block runs on the host the session belongs to, so in a window attached to a remote Tern host it
-lists that host's herdr-core panes and browses that host's folders. Install the plugin on that host.
-On Tern for iOS, open it from the drawer's search: **New Herdr block**.
+The Herdr block runs on the host the session belongs to. In a window attached to a remote Tern host
+it lists that host's herdr-core panes, browses that host's folders and starts new spaces there, and
+`hc attach` runs on that host. The pane it opens shows up in your window and takes the focus as in a
+local session.
+
+The plugin has two halves, and each comes from a different machine:
+
+| Install on | Gives you |
+|---|---|
+| The machine you're sitting at (the client) | The keys and the "Herdr: open …" commands, and the fallback below |
+| The remote host | The Herdr block itself, and **New Herdr block** in the command palette |
+
+So install it on both (see [On a remote host](#on-a-remote-host)). With only one:
+
+- **Only on the client:** the keys say "Herdr Picker isn't installed on this host".
+- **Only on the host:** the keys do nothing in that host's sessions, but **New Herdr block** in the
+  palette works.
+
+herdr-core has to run on the host too: the block only sees the herdr-core of the host the session
+belongs to, never the client's or another machine's.
+
+On Tern for iOS, open it from the drawer's search: **New Herdr block**. Nothing needs installing on
+the phone; the plugin on the host the phone is attached to does the work.
 
 ## Requirements
 
@@ -133,6 +156,27 @@ tern plugin link ./tern-plugin-herdr-picker/plugin
 tern plugin reload herdr-picker
 ```
 
+### On a remote host
+
+To use the plugin in a window attached to another machine's Tern (`tern remote`), install it on
+that machine as well as on yours. Run the same command in a shell on the host (over `ssh`, or in a
+pane of that host's session):
+
+```sh
+tern plugin install github.com/RookieZoe/tern-plugin-herdr-picker/plugin --force
+tern plugin list   # herdr-picker <version> … ready
+```
+
+Then, on the host:
+
+- Make sure `hc` is installed there and the block can find it ([below](#finding-hc-and-tern)); set
+  `HC_BIN` for the host's daemon if it lives somewhere else.
+- Keep both machines on the same plugin version; Tern doesn't check that they match. Update both
+  with `--force`.
+
+Works with macOS, Linux and Windows hosts. Open a window on the host's session and press the key, or
+run **New Herdr block** from the palette: the list should show the host's panes, not yours.
+
 ## Finding `hc` and `tern`
 
 The block runs in Tern's session daemon, whose `PATH` is the system default, so the plugin looks for
@@ -147,8 +191,9 @@ The block runs in Tern's session daemon, whose `PATH` is the system default, so 
 If the block says it can't find `hc`, set `HC_BIN` to its full path where the daemon starts.
 
 It opens panes with the `tern` CLI (`TERN_EXE`, then `/Applications/Tern.app`, `~/.local/bin`,
-`/usr/local/bin`, `/usr/bin`, `%LOCALAPPDATA%\Programs\Tern`). Without one, the window opens the
-pane instead.
+`/usr/local/bin`, `/usr/bin`, `%LOCALAPPDATA%\Programs\Tern`). Without one, your window opens the
+pane instead, running the host's `hc`. That needs the plugin on your machine too, and it doesn't
+check whether the pane is already open somewhere.
 
 ## How panes are classified
 

@@ -7,6 +7,9 @@ new herdr space, or add a tab to one, and open it in a Tern block.
 tern plugin install github.com/RookieZoe/tern-plugin-herdr-picker/plugin
 ```
 
+For a window attached to a remote Tern host, install it on both machines:
+[On a remote host](plugin/README.md#on-a-remote-host).
+
 Usage, requirements and limitations: [plugin/README.md](plugin/README.md).
 
 ## Repository layout

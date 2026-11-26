@@ -4,8 +4,8 @@
 -- the `tern-herdr-picker:` link route the block falls back to when the `tern`
 -- CLI can't open its pane.
 --
---   Herdr: open below     (⌘⇧H)
---   Herdr: open right     (⌘⌥H)
+--   Herdr: open below     (⌘⇧H; Ctrl+Alt+H on Linux and Windows)
+--   Herdr: open right     (⌘⌥H; Ctrl+Alt+Shift+H on Linux and Windows)
 --
 -- The block offers open a pane / new space / new tab; the pane it ends with
 -- takes the block's place. Users rebind these in settings.json `keybinds`
@@ -14,14 +14,33 @@
 local KIND = "herdr-picker.herdr"
 local MAC = tern.runtime.os == "macos" or tern.runtime.os == "ios"
 
--- ⌘ on a Mac; elsewhere `cmd` would be the Windows/Super key, so use Ctrl.
-local function chord(rest: string): { string }
-	return { (if MAC then "cmd+" else "ctrl+") .. rest }
-end
+-- Default keys per platform. On a Mac, ⌘⇧H and ⌘⌥H. Elsewhere `cmd` would be
+-- the Windows/Super key, and Tern's Linux/Windows preset already binds
+-- Ctrl+Shift+H (a plugin key the preset binds is dropped), so Ctrl+Alt+H and
+-- Ctrl+Alt+Shift+H, both free there.
+local KEYS = if MAC
+	then { below = "cmd+shift+h", right = "cmd+alt+h" }
+	else { below = "ctrl+alt+h", right = "ctrl+alt+shift+h" }
 
+-- Beside the focused pane; with no pane to open beside (an empty session,
+-- e.g. a remote host's with no blocks yet), as a tab of its own, where
+-- `beside` would raise "no focused pane to open beside".
 local function open_block(cx: WindowCx, dir: Dir)
-	local pane = cx:new_block(KIND, { "mode=home" }, "beside", { dir = dir, focus = true })
-	if not pane then
+	local function try(how: How, opts: BlockOpts): (boolean, any)
+		return pcall(function()
+			return cx:new_block(KIND, { "mode=home" }, how, opts)
+		end)
+	end
+	local ok, pane = false, nil
+	if cx.session:focused() then
+		ok, pane = try("beside", { dir = dir, focus = true })
+	end
+	if not ok then
+		ok, pane = try("tab", { focus = true })
+	end
+	if not ok then
+		cx:toast("error", "Herdr: can't open the block", tostring(pane))
+	elseif not pane then
 		cx:toast("error", "Herdr Picker isn't installed on this host",
 			"Install the plugin where the session runs (tern plugin install)")
 	end
@@ -31,7 +50,7 @@ tern.command({
 	id = "open",
 	title = "Herdr: open below",
 	icon = "terminal",
-	keys = chord("shift+h"),
+	keys = { KEYS.below },
 	run = function(cx)
 		open_block(cx, "down")
 	end,
@@ -41,7 +60,7 @@ tern.command({
 	id = "open-right",
 	title = "Herdr: open right",
 	icon = "terminal",
-	keys = chord("alt+h"),
+	keys = { KEYS.right },
 	run = function(cx)
 		open_block(cx, "right")
 	end,
@@ -74,11 +93,33 @@ local function hc_bin(): string
 	return "hc"
 end
 
-local function attach_command(address: string): string
-	local bin = hc_bin()
-	-- A quoted program name is not callable in PowerShell without `&`.
-	if string.find(bin, "%s") then
-		bin = if tern.runtime.os == "windows" then "& " .. quote(bin) else quote(bin)
+-- The host's `hc` path from the link, if it looks like one: absolute, named
+-- hc, hc.exe or herdr-core, and free of quotes and shell metacharacters. The
+-- link can be any text a program printed, so nothing else is run.
+local function host_hc(path: string?): string?
+	if not path or path == "" or string.find(path, "[%c'\"`$;&|<>%%!^]") then
+		return nil
+	end
+	if not (string.match(path, "^/") or string.match(path, "^%a:[\\/]")) then
+		return nil
+	end
+	local name = string.lower(string.match(path, "([^\\/]+)$") or "")
+	if name == "hc" or name == "hc.exe" or name == "herdr-core" or name == "herdr-core.exe" then
+		return path
+	end
+	return nil
+end
+
+-- `hc attach <address>` as the host's shell runs it. The command runs on the
+-- session's host, which in a remote session isn't this machine, so the host's
+-- own `hc` path (from the link) wins over the one found here.
+local function attach_command(address: string, from_host: string?): string
+	local bin = from_host or hc_bin()
+	local windows_path = string.match(bin, "^%a:[\\/]") ~= nil
+		or (from_host == nil and tern.runtime.os == "windows")
+	if from_host or string.find(bin, "%s") then
+		-- A quoted program name is not callable in PowerShell without `&`.
+		bin = if windows_path then "& " .. quote(bin) else quote(bin)
 	end
 	return bin .. " attach " .. address
 end
@@ -98,6 +139,33 @@ local function query_params(url: string): { [string]: string }
 	return out
 end
 
+-- The Herdr block that sent the link, found by its kind, not by a pane id:
+-- the host half only knows the host's ids, and a window numbers a remote
+-- host's panes its own way, so a host id could name an unrelated local pane.
+-- The link's own pane first, then a focused Herdr block, then one in the
+-- focused tab, then any.
+local function herdr_block(cx: WindowCx, link_pane: number): number?
+	local info = cx.session:pane(link_pane)
+	if info and info.block == KIND then
+		return link_pane
+	end
+	local focused = cx.session:focused()
+	local focused_tab = if focused then cx.session:tab_of(focused) else nil
+	local in_tab, any
+	for _, p in cx.session:panes() do
+		if p.block == KIND and not p.parked then
+			if p.focused then
+				return p.pane
+			end
+			if focused_tab and p.tab == focused_tab then
+				in_tab = in_tab or p.pane
+			end
+			any = any or p.pane
+		end
+	end
+	return in_tab or any
+end
+
 tern.route.link(function(link: LinkRequest, cx: WindowCx): RouteDecision?
 	if not string.match(link.url, "^tern%-herdr%-picker:attach%?") then
 		return nil
@@ -108,13 +176,9 @@ tern.route.link(function(link: LinkRequest, cx: WindowCx): RouteDecision?
 		cx:toast("error", "Herdr: bad link", link.url)
 		return { handled = true }
 	end
-	local target = tonumber(params.target or "")
-	if target and not cx.session:pane(target) then
-		target = nil
-	end
-	target = target or cx.session:focused() or link.pane
+	local target = herdr_block(cx, link.pane) or cx.session:focused() or link.pane
 	local pane = cx.layout:split(target :: number, "right", {
-		command = attach_command(address),
+		command = attach_command(address, host_hc(params.hc)),
 		cwd = if params.cwd and params.cwd ~= "" then params.cwd else nil,
 	})
 	if not pane then

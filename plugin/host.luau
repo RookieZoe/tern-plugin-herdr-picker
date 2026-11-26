@@ -525,9 +525,18 @@ end
 -- Opening a terminal in a split
 
 -- Fallback: the window half's link route splits the pane and runs hc attach.
+-- No pane id goes in the link: this block's id is the host's, which a window
+-- attached to this host numbers differently; the route finds the block by
+-- its kind instead. This host's `hc` path goes along: the route's command
+-- runs here, and a path the window works out on its own machine may not exist
+-- here.
 local function open_by_link(s: State, address: string, cwd: string)
 	local url = "tern-herdr-picker:attach?addr=" .. urlencode(address)
-		.. "&target=" .. urlencode(s.target) .. "&cwd=" .. urlencode(cwd)
+		.. "&cwd=" .. urlencode(cwd)
+	local hc = hc_bin()
+	if hc then
+		url ..= "&hc=" .. urlencode(hc)
+	end
 	log("open by link", url)
 	s.cx:open(url)
 	s.cx:exit(0)
