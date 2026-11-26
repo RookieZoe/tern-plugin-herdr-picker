@@ -64,6 +64,9 @@ type Pane = {
 
 type Space = { id: string, name: string, cwd: string, tabs: number }
 
+-- A Windows drive, as the New space browser lists them above the drive roots.
+type Drive = { root: string, kind: string, ready: boolean, label: string }
+
 type State = {
 	mode: string,
 	entry: string, -- the mode the block opened in; Esc there closes it
@@ -75,6 +78,7 @@ type State = {
 	panes: { Pane },
 	dir: string, -- space: the folder being browsed
 	subdirs: { string },
+	drives: { Drive }?, -- space, Windows: the drive list is showing instead of `dir`
 	target: string,
 	attached: { [string]: number }, -- address → the Tern block running `hc attach` on it
 	collapsed: { [string]: boolean }, -- pick: space groups folded shut
@@ -508,8 +512,61 @@ local function load_dir(s: State, dir: string)
 	end)
 	s.dir = dir
 	s.subdirs = subdirs
+	s.drives = nil
 	s.query = ""
 	s.sel = 1
+end
+
+-- Windows: "C:\" and the like, where ".." leads to the drive list.
+local function is_drive_root(dir: string): boolean
+	return WINDOWS and string.match(dir, "^%a:[/\\]?$") ~= nil
+end
+
+-- One line per drive: root, type, ready, label. From .NET in a process, so a
+-- slow or disconnected network drive can't use up the host half's 2 s budget.
+local DRIVES_PS = "[System.IO.DriveInfo]::GetDrives() | ForEach-Object { "
+	.. "$r = $_.IsReady; $l = if ($r) { $_.VolumeLabel } else { '' }; "
+	.. "'{0}{4}{1}{4}{2}{4}{3}' -f $_.Name, $_.DriveType, $r, $l, [char]9 }"
+
+-- Shows the drive list in place of the folder being browsed (Windows).
+local function load_drives(s: State)
+	local from = string.upper(string.match(s.dir, "^(%a):") or "")
+	s.drives = {}
+	s.query = ""
+	s.sel = 1
+	s.loading = true
+	s.err = nil
+	run({ "powershell", "-NoProfile", "-Command", DRIVES_PS }, nil, function(ok, out, err)
+		if not s.drives or s.mode ~= "space" then
+			return -- left the drive list meanwhile
+		end
+		s.loading = false
+		if not ok then
+			s.err = "Could not list the drives: " .. err
+			s.cx:render()
+			return
+		end
+		local list: { Drive } = {}
+		for line in string.gmatch(out, "[^\r\n]+") do
+			local root, kind, ready, label = string.match(line, "^(%a:\\)\t([^\t]*)\t([^\t]*)\t?(.*)$")
+			if root then
+				table.insert(list, { root = root, kind = kind :: string, ready = ready == "True", label = trim(label or "") })
+				if string.upper(string.sub(root, 1, 1)) == from then
+					s.sel = #list
+				end
+			end
+		end
+		s.drives = list
+		s.cx:render()
+	end)
+end
+
+-- What a typed path means: "~" expanded, and on Windows "D:" as "D:\".
+local function typed_path(q: string): string
+	if WINDOWS and string.match(q, "^%a:$") then
+		return q .. "\\"
+	end
+	return expand_home(q)
 end
 
 local function enter_mode(s: State, mode: string)
@@ -800,13 +857,36 @@ end
 
 local function looks_like_path(q: string): boolean
 	return string.match(q, "^[/~]") ~= nil or string.match(q, "^%a:[/\\]") ~= nil
+		or (WINDOWS and string.match(q, "^%a:$") ~= nil)
 end
 
 local function space_rows(s: State): { Row }
 	local out: { Row } = {}
 	local q = trim(s.query)
+	if s.drives and not looks_like_path(q) then
+		for _, d in s.drives do
+			if matches(q, d.root, d.label) then
+				local bits = { d.kind }
+				if d.label ~= "" then
+					table.insert(bits, 1, d.label)
+				end
+				table.insert(out, {
+					id = "v:" .. d.root,
+					item = {
+						id = "v:" .. d.root,
+						label = d.root,
+						detail = if d.ready then table.concat(bits, "  ·  ") else d.kind .. "  ·  not ready",
+						icon = "folder",
+						hits = hits(d.root, q),
+						disabled = if d.ready then nil else "Not ready",
+					},
+				})
+			end
+		end
+		return out
+	end
 	if looks_like_path(q) then
-		local path = expand_home(q)
+		local path = typed_path(q)
 		local ok = is_dir(path)
 		table.insert(out, {
 			id = "@go",
@@ -828,6 +908,8 @@ local function space_rows(s: State): { Row }
 		local up = parent(s.dir)
 		if up then
 			table.insert(out, { id = "@up", item = { id = "@up", label = "..", detail = short_path(up), icon = "folder" } })
+		elseif is_drive_root(s.dir) then
+			table.insert(out, { id = "@drives", item = { id = "@drives", label = "..", detail = "Drives", icon = "folder" } })
 		end
 	end
 	for _, name in s.subdirs do
@@ -919,7 +1001,9 @@ end
 
 -- Esc and the sheet's Close/Back: back to home when the block opened there.
 local function back(s: State)
-	if s.mode ~= "home" and s.entry == "home" then
+	if s.mode == "space" and s.drives then
+		load_dir(s, s.dir) -- the drive list steps back to the folder it came from
+	elseif s.mode ~= "home" and s.entry == "home" then
 		set_mode(s, "home")
 	else
 		s.cx:exit(0)
@@ -957,11 +1041,15 @@ local function activate(s: State, id: string?)
 			if up then
 				load_dir(s, up)
 			end
+		elseif id == "@drives" then
+			load_drives(s)
 		elseif id == "@go" then
-			local path = expand_home(trim(s.query))
+			local path = typed_path(trim(s.query))
 			if is_dir(path) then
 				load_dir(s, path)
 			end
+		elseif string.sub(id, 1, 2) == "v:" then
+			load_dir(s, string.sub(id, 3))
 		elseif string.sub(id, 1, 2) == "d:" then
 			load_dir(s, join(s.dir, string.sub(id, 3)))
 		end
@@ -1057,12 +1145,12 @@ local function sheet(s: State): Node
 	end
 	if spec.title then
 		props.title = spec.title
-		props.subtitle = short_path(s.dir)
+		props.subtitle = if s.drives then "Drives" else short_path(s.dir)
 	end
 	if s.mode == "space" then
 		props.actions = {
 			{ id = "close", label = if s.entry == "home" then "Back" else "Close", keys = { "esc" } },
-			{ id = "create", label = "Create here", keys = { "cmd", "enter" } },
+			{ id = "create", label = "Create here", keys = { "cmd", "enter" }, disabled = (s.drives ~= nil) or nil },
 			{ id = "activate", label = spec.primary, keys = { "enter" }, primary = true, disabled = (sel == nil) or nil },
 		}
 	elseif s.mode == "pick" then
@@ -1155,8 +1243,12 @@ tern.block.define("herdr", {
 			if s.query == "" then
 				if s.mode == "space" then
 					local up = parent(s.dir)
-					if up then
+					if s.drives then
+						load_dir(s, s.dir) -- back from the drive list
+					elseif up then
 						load_dir(s, up)
+					elseif is_drive_root(s.dir) then
+						load_drives(s)
 					end
 				else
 					return false
@@ -1167,7 +1259,9 @@ tern.block.define("herdr", {
 			end
 		elseif name == "enter" then
 			if s.mode == "space" and (key.meta or key.ctrl) then
-				start_shell(s, s.dir, nil)
+				if not s.drives then
+					start_shell(s, s.dir, nil)
+				end
 			else
 				activate(s, selected_id(s))
 			end
@@ -1195,7 +1289,7 @@ tern.block.define("herdr", {
 				back(s)
 			elseif act == "activate" then
 				activate(s, selected_id(s))
-			elseif act == "create" and s.mode == "space" then
+			elseif act == "create" and s.mode == "space" and not s.drives then
 				start_shell(s, s.dir, nil)
 			elseif act == "tab" and type(ev.value) == "string" then
 				s.view = ev.value

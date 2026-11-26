@@ -72,7 +72,12 @@ Filter folders, or type a path…
 
 ↵ on a folder goes into it, Backspace (with nothing typed) goes up, and **Use …** or **Create here**
 (⌘↵) starts the space there. Type to filter the folders, or type a path starting with `/` or `~` to
-jump to it. Folders starting with `.` aren't listed; type their path instead.
+jump to it (on Windows also `D:\…`, or just `D:`). Folders starting with `.` aren't listed; type
+their path instead.
+
+On a Windows host, **..** at a drive's root (`C:\`) lists the drives, with each one's label; ↵ on a
+drive goes to its root, and Esc or Backspace goes back to the folder you came from. A drive that
+isn't ready, such as an empty card reader, is shown but can't be picked.
 
 The plugin starts a shell in that folder through `hc` and opens it in the block's place. The Herdr app shows
 it as a new space named after the folder or repo, without switching the space it's showing. To run
