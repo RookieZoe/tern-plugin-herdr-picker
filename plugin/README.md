@@ -125,6 +125,20 @@ belongs to, never the client's or another machine's.
 On Tern for iOS, open it from the drawer's search: **New Herdr block**. Nothing needs installing on
 the phone; the plugin on the host the phone is attached to does the work.
 
+On iPhone and iPad the block is touch-only: no keys reach it on iOS, so there is no filter and no
+typed path in **New space**. Everything else is a tap away: the rows, the **All**, **Agents** and
+**Terminals** tabs, **Create here** and **..**. The sheet's **Done** pill (or dragging the sheet
+down) goes back a step, or closes the block from the first one. On iPhone one tap acts on a row, as
+↵ does; on iPad the first tap selects it and a second acts on it.
+
+Installing the plugin on the phone as well is optional, and only worth it with an external
+keyboard, for **⌘⇧H** and **⌘⌥H**. Download `herdr-picker-<version>.zip` from
+[Releases](https://github.com/RookieZoe/tern-plugin-herdr-picker/releases), unzip it, and put the
+`herdr-picker` folder in Files › On My iPhone (or iPad) › Tern › Plugins (via iCloud Drive or
+AirDrop, if you unzipped it elsewhere). If it doesn't show up, kill Tern and open it again.
+`tern plugin install … --force` on the host doesn't update the phone's copy: to update it, replace
+the folder on the phone with the newer release's.
+
 ## Requirements
 
 - Tern with plugin support
