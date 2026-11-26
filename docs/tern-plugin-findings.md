@@ -7,7 +7,9 @@ herdr-core `hc` 0.1.21. The API reference is the type file Tern generates for a 
 tern plugin types plugin   # writes plugin/tern.d.luau (git-ignored here)
 ```
 
-Recheck these points after a Tern upgrade; any of them may change.
+Rechecked against Tern 0.9.35 for 0.5.1 (2026-11-26); the 0.9.32 → 0.9.35 changes to the plugin API
+were `actions.outside` and settings `slot = "search"`, neither used here. Recheck these points after
+a Tern upgrade; any of them may change.
 
 ## Command palette
 
@@ -24,6 +26,9 @@ Recheck these points after a Tern upgrade; any of them may change.
   plugin can't centre them in the window; with several splits they sit off-centre. `tern.ui.node`'s
   `overlay` kind only draws inside a plugin block, and zooming the pane around the picker is a hack
   that leaves the pane zoomed if anything fails.
+- Since 0.5.1 the plugin no longer uses `cx:pick`: its own block draws Tern's `picker` node (see
+  [The `picker` node](#the-picker-node)), which looks like the palette and can show tabs, badges,
+  logos and a tree.
 - An unknown icon name raises. The plugin calls `cx:pick` in `pcall` and retries without icons.
   Icon names seen in the Tern binary include `terminal`, `sparkle`, `list`, `server`, `folder` and
   `provider-<name>` brand icons (`provider-anthropic`, `provider-openai`, `provider-github`,
@@ -36,13 +41,14 @@ Recheck these points after a Tern upgrade; any of them may change.
 - `tern.process.run` in the window half runs on the window's machine. So a window-half picker that
   calls `hc ls` lists the local herdr-core panes only. Listing a remote host's panes needs the host
   half, through a plugin block (`tern.block.define`), opened with `cx:new_block("<plugin>.<block>")`.
-  This plugin has only ever had a window half (no `host.luau` exists in its git history) and lists
-  local panes only.
+  Up to 0.5.0 this plugin had only a window half and listed local panes only; since 0.5.1 its Herdr
+  block lives in `host.luau`, so it lists the panes of the host the session belongs to.
 - Every block a manifest declares in `[[blocks]]` also gets a "New … block" row in the palette under
   Plugins (`palette: true` in `tern plugin list --json`). Removing the block removes the row.
 - `cx.layout:split(target, "right", { command = …, cwd = … })` opens a terminal split running a shell
   command and returns its pane number. `cx.session:panes()` and `cx.layout:focus(pane)` find and
-  focus it again. `tern.kv` persists the address → pane mapping between commands.
+  focus it again. (0.5.0 kept an address → pane map in `tern.kv` to find a pane it had opened; that
+  missed panes attached any other way, so 0.5.1 reads `tern ls --json` instead, below.)
 - `tern.getenv`, `tern.fs`, `tern.kv`, `tern.json`, `tern.log` and `tern.timer` work in both halves.
   `tern.runtime.os` is `"macos"`, `"linux"`, `"windows"` or `"ios"`.
 
@@ -68,6 +74,86 @@ Checked on desktop with Tern 0.9.32 and a throwaway plugin (2026-11-24). Full no
   `tern plugin reload` or unlink + link. A top-level `tern.timer` in the window half gets a fresh
   `cx` on each load; with `cx.session:event` and `cx:action("block:<plugin>.<block>")` it can drive a
   block in tests.
+
+## Opening, focusing and replacing blocks
+
+Checked on macOS with Tern 0.9.35, 2026-11-25/26, first with a throwaway probe plugin, then in 0.5.1.
+
+- `cx:new_block(kind, args, how, opts)` placements (`How`):
+  - `"beside"` with `opts.dir = "down"` or `"right"` splits the focused pane and focuses the block.
+    0.5.1 opens the Herdr block this way (⌘⇧H below, ⌘⌥H right).
+  - `"glimpse"` floats the block over the whole tab, in no split, until a click outside it. It
+    doesn't take the keyboard even with `{ focus = true }`: keys keep going to the pane under it
+    until `cx.layout:focus(pane)` runs (the probe called it at once and again from a 100 ms
+    `tern.timer`). Tern draws its own frame around it (a title bar with Keep beside / Keep in a new
+    tab, and a hint along the bottom), which a plugin can't remove.
+  - `"over"` takes the focused pane's slot and parks that pane until the block closes. A parked pane
+    is in no tab, so `tern split <parked pane>` fails (`no block is called …`). Split the block
+    itself instead.
+  - Reloading a plugin turns an open glimpse block into an ordinary split.
+- A block can't turn into a terminal. To "replace" itself, the Herdr block runs
+  `tern split <cx.pane> right --json -- <cmd>` from the host half, then `cx:exit(0)`: the new pane
+  takes over the closed block's slot. `tern split` leaves the focus where it was, so the block then
+  runs `tern focus <doc.block>` (the `block` field of the `--json` reply).
+- Call `cx:exit(0)` before `tern focus`: a closing block hands the focus to a neighbour, and that can
+  land after the focus call. A process `tern.process.run` started keeps running, and its callback
+  still runs, after the block that started it has closed (the VM owns it).
+- `tern ls --json` lists `sessions[].tabs[].blocks[]`, each with `id`, `program`, `args`, `command`,
+  `live` and `exited`. It covers one window's sessions: `--window`'s, else the window showing
+  `$TERN_PANE`, else the first window. The daemon sets no `TERN_PANE`, so the plugin passes the
+  block's own pane in `env`.
+- A block Tern opened with a command shows that command wrapped in the user's shell:
+  `program = "/bin/zsh"`, `args = ["-c", "<the whole command as one shell-quoted line>"]`, and
+  `command` the same line. A plugin looking for its own command must match that quoted line, not
+  separate arguments (0.5.1 missed its own `/bin/sh -c '…attach "$1"' …/hc t44` blocks until it
+  did). A pane a person opened by typing `hc attach t2p` shows `args = ["-l", "-c", "…/hc attach t2p"]`.
+- Closing a block whose program is running asks "Close block? … is running" unless the program has
+  reported itself idle with OSC 7501: the plugin starts
+  `/bin/sh -c "printf '\033]7501;state=idle\007'; exec \"$0\" attach \"$1\"" <hc> <addr>`. Not done on
+  Windows, which still asks.
+
+## The `picker` node
+
+From Tern's docs (UI nodes › picker) and checked in a host-half block on Tern 0.9.35.
+
+- `tern.ui.node("picker", props)` placed in a block view's `layer` region draws the palette-style
+  glass sheet over the block; `size = "md"` is the palette's size. In `main` it only covers its
+  container.
+- It draws no real text field: `query` is shown with a drawn caret, and every key (arrows, Enter,
+  Esc, Backspace, Tab, ←/→, text) reaches the block's `key` hook, which updates `query`,
+  `selected` and the rest. Key names seen: `up`, `down`, `left`, `right`, `enter`, `escape`,
+  `backspace`, `tab`. The node doesn't switch `tabs` on ←/→ itself.
+- Pointer input comes as `event`s: `select` / `activate` with `item`, and `action` with `act` =
+  `tab` (with `value`), `close`, `clear`, `retry` or an `actions[]` id.
+- Useful props: `items` (`id`, `label`, `detail`, `icon`, `mark = {text, icon = "provider:<id>"}`
+  for a provider logo, `badges = {{text, tone}}`, `hits` in UTF-16 offsets, `disabled`), `order`
+  (ids, or `{group, label, count}` headings), `selected`, `current` (ids drawn with a check), `tabs`
+  / `tab`, `actions` (`{id, label, keys, primary, disabled}`; an action with `esc` in its keys
+  replaces the head's esc keycap), `title`, `subtitle`, `state` (`loading`, `error`, `ready`),
+  `message`, `empty`.
+- `layout = "tree"` draws depth guides and a chevron: each item's `depth` indents it, `open = true`
+  / `false` draws the chevron open or shut, and an item without `open` is a leaf. Folding is the
+  plugin's job: it leaves the children out.
+
+## Logs and keys
+
+- Only `tern.log.warn` and `tern.log.error` reach the log files; `tern.log.info` is dropped. The
+  window half logs to `~/Library/Logs/Tern/tern.log`, the host half to `tern-daemon.log`.
+- `tern.command{ keys = { "cmd+shift+h" } }` sets a default key in the plugin layer. A person
+  rebinds or turns it off in `settings.json` `keybinds` with the action name
+  `plugin.<plugin>.<command id>` (an empty list turns a key off), so a plugin needs no settings UI
+  for keys. A plugin key that the defaults or preset already bind is dropped with a
+  "plugin bind left out" warning in the log. `cmd` on Windows and Linux is the Windows/Super key, so
+  the plugin uses `ctrl` there.
+
+## Randomness
+
+- Luau's `math.random` in Tern's VM starts from the same seed on every load, and `os.time` isn't
+  there to reseed it (a table's address doesn't help either). Two plugin loads made the same
+  "random" herdr space and tab ids, so a new space landed in an older one. Get random bytes from
+  the OS instead: `od -An -N32 -tx1 /dev/urandom` (Windows: `[guid]::NewGuid()` in PowerShell).
+- `tern.fs.read` can't read `/dev/urandom`: without `max_bytes` it reads forever, and with
+  `max_bytes` it takes regular files only.
 
 ## iOS
 
@@ -155,13 +241,19 @@ Checked against herdr-app 0.1.17 and hc 0.1.22.
   next tab. Verified 2026-11-24 with hc 0.1.22 (window open): `where` became `herdr-picker / 2`
   within a second.
 - `herdr-app do space.new` also makes a space, but only while the app's window is running.
+- The app adopts labels when a terminal first appears. Changing an existing terminal's
+  `herdr.space` / `herdr.tab` with `hc label` changes the labels only: the terminal stays where it
+  was in the `herdr-app` document, and its `where` doesn't change. Moving a terminal to another space
+  means starting a new one with the new labels. (Seen 2026-11-26, Herdr app running.)
 - Agent status in `hc ls` comes from the program's own OSC 7501 reports, with no per-agent hook.
 
-## Tern APIs the new-space command uses
+## Tern APIs the new-space step uses
 
-- `cx:prompt(opts)` asks for one line of text; it resolves with the text, `nil` when dismissed.
-- There is no native file or folder dialog. `tern.fs.list` raises on a file, which tells folders
-  from files. `tern.files.button` can add a button to the Files pane header (unused here).
+- There is no native file or folder dialog, so the Herdr block browses folders itself with
+  `tern.fs.list` (0.5.0 asked for a path with `cx:prompt`, which resolves with the text, `nil` when
+  dismissed).
+- `tern.fs.list` gives names only. It raises on a file, which tells folders from files.
+  `tern.files.button` can add a button to the Files pane header (unused here).
 - `cx.session:panes()` gives each pane's `cwd` (`""` when unknown); `cx.session:focused()` gives the
   focused pane number.
 

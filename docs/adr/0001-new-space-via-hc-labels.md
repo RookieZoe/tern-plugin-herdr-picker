@@ -12,3 +12,5 @@ The plugin reads Spaces the same way. It runs `hc ls --json` (program, status an
 ## Consequences
 
 The new Space has no name of its own: Herdr calls it after its first Terminal's repo or folder. Verified 2026-11-24 with herdr-app 0.1.17 and hc 0.1.22 (window open): the Space appeared as `tmp / 1` and the shown Space did not change. Adoption with the window closed is assumed, not tested.
+
+Everything rests on the ids being new. Up to 0.5.0 they came from Luau's `math.random`, which Tern's VM seeds the same way on every load, so a later load could repeat an id and a "new" Space or Tab landed inside an older one (seen 2026-11-26). Since 0.5.1 they come from the OS's random bytes. A Terminal adopted into the wrong Space can't be moved by relabelling it: the app keeps it where it first put it, so it has to be replaced by a new Terminal.
