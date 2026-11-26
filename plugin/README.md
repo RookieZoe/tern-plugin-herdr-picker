@@ -22,9 +22,8 @@ Linux and Windows don't get Ctrl+Shift+H because Tern's own keys already use it 
 To change a key, map its action name in the `keybinds` of Tern's `settings.json`; an empty list
 (`"cmd+shift+h": []`) turns a key off.
 
-The pane you end up with, running `hc attach <address>`, takes the block's place. On macOS and
-Linux, closing it doesn't ask whether to end `hc`; on Windows it still asks. Either way, closing only
-detaches: the herdr-core terminal keeps running.
+The pane you end up with, running `hc attach <address>`, takes the block's place. Closing it doesn't
+ask whether to end `hc`, and only detaches: the herdr-core terminal keeps running.
 
 ### Open a pane
 

@@ -49,6 +49,20 @@ local STATUS: { [string]: { text: string, tone: string } } = {
 -- whether to end a running program; then `hc attach` takes the pane over.
 local IDLE_ATTACH = [[printf '\033]7501;state=idle\007'; exec "$0" attach "$1"]]
 
+-- The same on Windows, as one PowerShell command line for
+-- `powershell.exe -NoProfile -Command`. Tern runs a split's argv through the
+-- user's shell (`powershell.exe -c`), single-quoting every element with more
+-- than plain characters, so the script can't be handed to that shell itself:
+-- it goes to a second PowerShell as one argument. Tern honours the idle mark
+-- although PowerShell, not hc, stays the pane's process. `address` goes in
+-- bare: hc's addresses are plain words (`t4`), as `attached_address` reads them.
+local function windows_idle_attach(hc: string, address: string): string
+	return "[Console]::Write([char]27+']7501;state=idle'+[char]7); & '"
+		.. (string.gsub(hc, "'", "''"))
+		.. "' attach "
+		.. address
+end
+
 type Pane = {
 	address: string,
 	space_id: string?, -- herdr.space label; nil outside any space
@@ -361,7 +375,9 @@ end
 -- `… hc attach <addr>` (typed, or opened by the link route), or this
 -- plugin's `/bin/sh -c '<IDLE_ATTACH>' hc <addr>`. Tern may report that one
 -- as a single shell-quoted line (`… attach "$1"' /path/hc t44`) or as
--- separate arguments.
+-- separate arguments. On Windows Tern reports the plugin's command as
+-- `powershell.exe -NoProfile -Command '…; & ''C:\…\hc.exe'' attach t4'`,
+-- which the first pattern reads.
 local function attached_address(b: { [string]: any }): string?
 	local args: { string } = {}
 	if type(b.args) == "table" then
@@ -609,7 +625,7 @@ local function split_attach(s: State, tern_exe: string, hc: string, address: str
 	end
 	table.insert(argv, "--")
 	if WINDOWS then
-		for _, a in { hc, "attach", address } do
+		for _, a in { "powershell.exe", "-NoProfile", "-Command", windows_idle_attach(hc, address) } do
 			table.insert(argv, a)
 		end
 	else

@@ -109,8 +109,20 @@ Checked on macOS with Tern 0.9.35, 2026-11-25/26, first with a throwaway probe p
   did). A pane a person opened by typing `hc attach t2p` shows `args = ["-l", "-c", "…/hc attach t2p"]`.
 - Closing a block whose program is running asks "Close block? … is running" unless the program has
   reported itself idle with OSC 7501: the plugin starts
-  `/bin/sh -c "printf '\033]7501;state=idle\007'; exec \"$0\" attach \"$1\"" <hc> <addr>`. Not done on
-  Windows, which still asks.
+  `/bin/sh -c "printf '\033]7501;state=idle\007'; exec \"$0\" attach \"$1\"" <hc> <addr>`.
+- Windows (Tern 0.9.35, checked 2026-11-26 on a Windows desktop, issue #12): Tern runs a split's argv through the user's
+  shell too, `powershell.exe -c "<line>"`, and builds that line by PowerShell-quoting each element:
+  plain words stay bare, anything else (a space, or even `+`, `@`, `;`, `(`, `'`) goes in single
+  quotes with `'` doubled, and a quoted first element gets `&` in front (`& 'C:\x y\z.exe' 'a b'`).
+  So a script handed over as one element reaches PowerShell as a string literal, and there's no
+  `exec`: PowerShell stays the pane's process for its whole life. Tern still honours OSC 7501 from
+  it: in a Tern PowerShell pane, `[Console]::Write([char]27+']7501;state=idle'+[char]7); hc attach t4`
+  and then closing the block asked nothing, though `powershell.exe` was the running program. Since 0.5.6 the plugin opens
+  `powershell.exe -NoProfile -Command "[Console]::Write([char]27+']7501;state=idle'+[char]7); & '<hc>' attach <addr>"`:
+  a second PowerShell, so the script is one argument that Tern's quoting delivers intact, and `&`
+  so an `hc` path with a space still runs. `tern ls --json` reports it as
+  `command = "powershell.exe -NoProfile -Command '[Console]::Write(…); & ''C:\…\hc.exe'' attach t5'"`,
+  which `attached_address`'s `hc… attach <addr>` pattern reads.
 
 ## The `picker` node
 
