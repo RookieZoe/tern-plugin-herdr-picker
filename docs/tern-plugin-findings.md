@@ -270,6 +270,9 @@ each. Research notes are on the `research/tern-remote-install` branch.
 - `cx:new_block(kind, args, "beside", …)` raises "no focused pane to open beside" in a session with
   no blocks (seen on a remote host's empty session). Check `cx.session:focused()` first and open it
   with `"tab"` instead.
+- Over ssh to a Windows host, `tern` looks for the admin token's pipe (`tern-<user>-admin`) and finds
+  no Tern. Setting `TERN_DAEMON_SOCKET=\\.\pipe\tern-<user>` reaches the desktop daemon, so
+  `tern ls`, `split`, `capture` and `close` work from ssh (Tern 0.9.35, 2026-11-26).
 
 ## Internationalization
 
