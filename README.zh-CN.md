@@ -5,6 +5,10 @@
 一个用于 [herdr-core](https://herdr.dev)（`hc`）的 Tern 插件：挑选一个正在运行的 herdr-core 窗格、新建一个
 herdr space，或者给某个 space 加一个标签页，然后在 Tern 的 block 里打开它。
 
+![Open a pane：按 herdr space 分组的所有 herdr-core 窗格，带 agent 的图标和状态](docs/images/showcase-agents.zh.jpg)
+
+![New space 与 New tab：在某个文件夹里新建 herdr space，或给某个 space 加一个标签页](docs/images/showcase-space-tab.zh.jpg)
+
 ```sh
 tern plugin install github.com/RookieZoe/tern-plugin-herdr-picker/plugin
 ```
