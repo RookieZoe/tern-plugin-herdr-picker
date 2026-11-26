@@ -187,6 +187,49 @@ Checked on a real iPhone (Tern iOS 0.9.27, the latest; Mac on 0.9.32) with a thr
   `cx:pick` (groups, icons), `cx:prompt` and `cx.layout:split` with a command (run on the Mac) work.
   An unknown icon name doesn't raise there. `tern.kv` is per device.
 
+Checked on a real iPhone and iPad with herdr-picker 0.5.4, 2026-11-26 (issue #9). The Mac ran Tern
+0.9.35 and the phone Tern iOS 0.9.33, the latest iOS build. The daemon logs the phone as `client
+protocol level differs version=65 daemon=67`.
+
+- No key reaches the Herdr block's `key` hook from iOS. With an external keyboard, ↓, Enter, Esc
+  and a typed letter left nothing in a `tern.log.warn` probe at the top of the hook, which did fire
+  for `tern send <block> keys down`. Without an external keyboard, the soft keyboard can't be
+  brought up over the block. On iOS 0.9.27 the probe above did get soft-keyboard keys because it
+  had a focusable `input`; the Herdr block has none, and a tapped `input` brings the keyboard back
+  (issue #16, below).
+- Taps work. On iPhone one tap on a picker row sends `activate`. On iPad one tap selects the row
+  (the selection shows) and a second tap activates it, as on desktop. Picker `actions` buttons
+  (Create here, Back) are tappable.
+- `tern focus <block>` after the `tern split` moves the phone to the new pane, and the Mac window
+  follows. Closing an `hc attach` pane that sent OSC 7501 `state=idle` asks nothing on the phone.
+- With the window half installed on the phone, its `tern.command` keys (⌘⇧H) work from an external
+  keyboard. The drawer search shows one "New Herdr block" row, not one per side.
+
+Checked on a real iPhone (Tern iOS 0.9.33, Mac 0.9.35) with a throwaway `keyprobe` block,
+2026-11-26 (issue #16):
+
+- An `input` node brings the soft keyboard back, and its keys reach the block's `key` hook (not the
+  field). Only the user's tap on the field raises the keyboard. The block answers the tap's
+  `{ev = "focus", id}` with `cx:frame({{"focus", id}})`. The focus op alone does nothing visible: not
+  at open, and not from a button. Once the field holds the focus, a tap on it brings the keyboard up
+  without another `focus` event.
+- A `picker` in `layer` raises no keyboard: not when its search bar or a row is tapped, and not when
+  it sits over an `input`. This holds with or without an `input` under it.
+- The phone's Done pill (or dragging the sheet down) sends the picker action bound to `esc`, so the
+  phone needs no visible Back button.
+- Node ids are positional (`main.3` for the fourth child of `main`). The node's own `id` prop was
+  ignored, while a picker's `key` gave `layer.probe-sheet`. Take the id from the `focus` event.
+- A plugin linked on the Mac while the phone was connected didn't show in the phone's drawer search
+  after a reconnect. It showed after the iOS app was killed and opened again.
+- Not tested: an external keyboard over a focused `input`.
+
+Decided for the Herdr block (issue #14): on iOS it is touch-only. Tapping covers every step
+(rows, the All/Agents/Terminals chips, Create here, `..`, and Back/Close through the Done pill).
+What is lost is the filter and New space's typed path, both fed only by the `key` hook. There is
+no `input` workaround: it would need a second, phone-only layout, and the host half can't tell it's
+drawing for a phone (`tern.runtime.os` is the host's). No issue goes upstream for now. The README
+says the block is touch-only on iPhone and iPad.
+
 ## Remote hosts
 
 From Tern's docs (Distribution, Window API) and checked on two machines, 2026-11-26 (issue #11): a
