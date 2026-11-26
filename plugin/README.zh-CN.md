@@ -31,8 +31,10 @@ herdr-core 里的终端会继续运行。
 每个标签里的窗格按 herdr space 排成树：有多个窗格的 space 自成一行，下面是它的各个标签页，agent 和普通 shell
 混在一起；只有一个窗格的 space 只占一行。在 space 上按 ↵ 折叠或展开；搜索时所有匹配项都保持展开。
 
-- **Agent CLI**，比如 `claude-code` 或 `codex`，显示其图标、状态（working、needs input、done、idle）和目录。
-- **Terminals**，即普通 shell（`zsh`、`bash`、`pwsh`、`cmd`…），显示 shell 和目录。
+- **Agents**，即 AI 编程 CLI，比如 `claude-code`、`codex`、`opencode` 或 `agy`，显示其图标、状态（working、
+  needs input、done、idle）和目录。窗格一上报状态，或者它的程序是插件认识的 CLI，就算作 agent。
+- **Terminals**，即其余窗格，显示其中此刻在跑的程序（`zsh`，或在其中启动的 `nvim`、`docker`、`htop`）和目录。
+  常见工具也会显示各自的图标。
 
 直接输入即可过滤，↑/↓ 移动（到两端会循环），↵ 连接。
 

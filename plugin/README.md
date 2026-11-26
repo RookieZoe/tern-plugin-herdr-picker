@@ -34,9 +34,11 @@ Every live herdr-core pane, with tabs to narrow them down: **All**, **Agents** a
 is a row of its own, with its tabs under it, agents and plain shells together; a space with one pane
 is a single row. ↵ on a space folds or unfolds it; a search keeps every match unfolded.
 
-- **Agent CLIs**, such as `claude-code` or `codex`, show their logo, status (working, needs input,
-  done, idle) and directory.
-- **Terminals**, plain shells (`zsh`, `bash`, `pwsh`, `cmd`…), show the shell and directory.
+- **Agents**, AI coding CLIs such as `claude-code`, `codex`, `opencode` or `agy`, show their logo,
+  status (working, needs input, done, idle) and directory. A pane counts as an agent once it reports
+  a status, or when its program is a CLI the plugin knows.
+- **Terminals**, everything else, show what runs in them right now (`zsh`, or `nvim`, `docker`,
+  `htop` started in it) and the directory. Well-known tools show their icon too.
 
 Type to filter, ↑/↓ to move (they wrap around at either end), ↵ to attach.
 

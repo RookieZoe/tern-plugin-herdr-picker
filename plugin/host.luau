@@ -22,20 +22,65 @@ local TIMEOUT_MS = 8000
 local WINDOWS = tern.runtime.os == "windows"
 local HOME = tern.getenv("HOME") or tern.getenv("USERPROFILE") or ""
 
--- Programs that mean "a plain terminal"; any other foreground program is an
--- agent CLI.
-local SHELLS: { [string]: boolean } = {
-	sh = true, bash = true, zsh = true, fish = true, dash = true, ksh = true,
-	csh = true, tcsh = true, nu = true, xonsh = true, elvish = true,
-	pwsh = true, powershell = true, cmd = true, login = true,
-}
+-- Known programs, by command name (and the name an agent reports for itself
+-- in its status): whether it is an agent CLI, and the Tern icon its row shows
+-- (none: the plain sparkle). Only Tern's own icon names: the picker can't
+-- draw a plugin's images (docs/tern-plugin-findings.md). Aliases follow the
+-- Herdr app's programs.json. Anything not listed is a plain terminal.
+type Known = { agent: boolean, icon: string? }
 
--- Tern's provider logos for well-known agents.
-local PROVIDER: { [string]: string } = {
-	["claude-code"] = "anthropic", claude = "anthropic",
-	codex = "openai", gemini = "google", copilot = "github",
-	cursor = "cursor", ["cursor-agent"] = "cursor",
-}
+local PROGRAMS: { [string]: Known } = {}
+
+local function known(agent: boolean, icon: string?, names: { string })
+	for _, n in names do
+		PROGRAMS[n] = { agent = agent, icon = icon }
+	end
+end
+
+-- Agents
+known(true, "provider-anthropic", { "claude", "claude-code" })
+known(true, "provider-openai-codex", { "codex" })
+known(true, "provider-gemini", { "gemini", "gemini-cli" })
+known(true, "provider-github-copilot", { "copilot", "github-copilot" })
+known(true, "provider-cursor", { "cursor", "cursor-agent" })
+known(true, "provider-opencode", { "opencode" })
+known(true, "provider-kimi-code", { "kimi", "kimi-cli", "kimi-code" })
+known(true, "provider-qwen-portal", { "qwen", "qwen-code" })
+known(true, "provider-xai", { "grok", "grok-cli" })
+known(true, "provider-google-antigravity", { "agy", "antigravity" })
+known(true, "provider-devin", { "devin" })
+known(true, "provider-kilo", { "kilo", "kilocode", "kilo-code" })
+known(true, "provider-ollama", { "ollama" })
+known(true, "app-hermes", { "hermes" })
+known(true, "app-omp", { "omp" })
+known(true, "pi-mark", { "pi" })
+known(true, nil, { "amp", "goose", "crush", "kiro", "kiro-cli", "qoder", "qodercli", "droid", "aider", "auggie", "cline" })
+-- Tools
+known(false, "app-vim", { "vim", "nvim", "vi" })
+known(false, "app-helix", { "hx", "helix" })
+known(false, "app-emacs", { "emacs" })
+known(false, "app-docker", { "docker", "lazydocker" })
+known(false, "mi-git", { "git", "lazygit", "tig", "gitui" })
+known(false, "app-htop", { "htop", "top" })
+known(false, "app-btop", { "btop" })
+known(false, "app-node", { "node" })
+known(false, "mi-npm", { "npm", "npx" })
+known(false, "mi-pnpm", { "pnpm" })
+known(false, "mi-yarn", { "yarn" })
+known(false, "app-bun", { "bun", "bunx" })
+known(false, "app-deno", { "deno" })
+known(false, "app-python", { "python", "python3", "ipython", "uv", "uvx" })
+known(false, "app-rust", { "cargo", "rustc" })
+known(false, "app-go", { "go" })
+known(false, "app-ruby", { "ruby", "irb" })
+known(false, "app-java", { "java" })
+known(false, "mi-lua", { "lua", "luajit" })
+known(false, "mi-kubernetes", { "kubectl", "k9s" })
+known(false, "mi-helm", { "helm" })
+known(false, "mi-terraform", { "terraform", "tofu" })
+known(false, "mi-makefile", { "make" })
+known(false, "mi-database", { "psql", "mysql", "sqlite3", "redis-cli", "mongosh" })
+known(false, "server", { "ssh", "mosh" })
 
 local STATUS: { [string]: { text: string, tone: string } } = {
 	working = { text = "working", tone = "info" },
@@ -226,7 +271,15 @@ end
 local function program_name(raw: string): string
 	local base = string.match(raw, "([^/\\]+)$") or raw
 	base = string.gsub(base, "%.[eE][xX][eE]$", "")
+	base = string.gsub(base, "^%-", "") -- a login shell's "-zsh"
 	return string.lower(base)
+end
+
+-- hc reports a status only for agent CLIs; a known agent's name covers one
+-- that hasn't reported (yet).
+local function is_agent(p: Pane): boolean
+	local k = PROGRAMS[p.program]
+	return p.status ~= nil or (k ~= nil and k.agent)
 end
 
 -- UTF-16 offset of byte position `i` in `s`, as the picker's hits count.
@@ -341,9 +394,7 @@ local function parse_ls(stdout: string): { Pane }?
 				tab = tab or where,
 				where = where,
 				program = program,
-				-- hc reports a status only for agent CLIs; the program name
-				-- covers agents that haven't reported yet.
-				agent = type(status) == "string" or (program ~= "" and not SHELLS[program]),
+				agent = false, -- set by load_panes, once the foreground is known
 				status = if type(status) == "string" then status else nil,
 				cwd = if type(r.cwd) == "string" then r.cwd else "",
 				index = #out + 1,
@@ -353,19 +404,30 @@ local function parse_ls(stdout: string): { Pane }?
 	return out
 end
 
--- address → herdr.space, from a terminal.list reply.
-local function parse_spaces(stdout: string): { [string]: string }
-	local out: { [string]: string } = {}
+-- What terminal.list adds to hc ls, per address: the herdr.space label and
+-- the foreground program (its argv[0]: `foreground.name` can be a version,
+-- as Claude Code's `2.1.332`).
+type Extra = { space: string?, foreground: string? }
+
+local function parse_list(stdout: string): { [string]: Extra }
+	local out: { [string]: Extra } = {}
 	local ok, doc = pcall(tern.json.decode, first_line(stdout))
 	if not ok or type(doc) ~= "table" or type(doc.result) ~= "table" or type(doc.result.terminals) ~= "table" then
 		return out
 	end
 	for _, r in doc.result.terminals do
-		if type(r) == "table" and type(r.address) == "string" and type(r.labels) == "table" then
-			local space = r.labels["herdr.space"]
+		if type(r) == "table" and type(r.address) == "string" then
+			local e: Extra = {}
+			local space = if type(r.labels) == "table" then r.labels["herdr.space"] else nil
 			if type(space) == "string" and space ~= "" then
-				out[r.address] = space
+				e.space = space
 			end
+			local fg = r.foreground
+			local argv0 = if type(fg) == "table" and type(fg.argv) == "table" then fg.argv[1] else nil
+			if type(argv0) == "string" and argv0 ~= "" then
+				e.foreground = program_name(argv0)
+			end
+			out[r.address] = e
 		end
 	end
 	return out
@@ -482,9 +544,17 @@ local function load_panes(s: State)
 		if not panes then
 			s.err = "Could not read hc ls output."
 		else
-			local spaces = parse_spaces(spaces_out)
+			local extra = parse_list(spaces_out)
 			for _, p in panes do
-				p.space_id = spaces[p.address]
+				local e = extra[p.address]
+				p.space_id = e and e.space
+				-- The Program: the name an agent reports (hc ls gives it while
+				-- there is a status), else the foreground program, else the
+				-- one the terminal started with.
+				if p.status == nil and e and e.foreground then
+					p.program = e.foreground
+				end
+				p.agent = is_agent(p)
 			end
 			s.panes = panes
 		end
@@ -498,8 +568,9 @@ local function load_panes(s: State)
 		end
 		done()
 	end)
-	-- terminal.list carries the labels hc ls leaves out; without it every
-	-- terminal is outside a space, which only empties "New tab".
+	-- terminal.list carries the labels and foreground programs hc ls leaves
+	-- out; without it every terminal is outside a space, which only empties
+	-- "New tab", and shows the program it started with.
 	run({ hc, "connect", "--json" }, '{"jsonrpc":"2.0","id":1,"method":"terminal.list","params":{}}\n',
 		function(ok, out, _err)
 			spaces_out = if ok then out else ""
@@ -772,9 +843,10 @@ local function pane_item(s: State, p: Pane, label: string, show_cwd: boolean): {
 		badges = if st then { { text = st.text, tone = st.tone } } else nil,
 		hits = hits(label, s.query),
 	}
-	local provider = PROVIDER[p.program]
-	if p.agent and provider then
-		item.mark = { text = p.program, icon = "provider:" .. provider }
+	-- A mark draws the program's initials if Tern lacks the icon.
+	local k = PROGRAMS[p.program]
+	if k and k.icon then
+		item.mark = { text = p.program, icon = k.icon }
 	else
 		item.icon = if p.agent then "sparkle" else "terminal"
 	end

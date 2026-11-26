@@ -29,10 +29,9 @@ a Tern upgrade; any of them may change.
 - Since 0.5.1 the plugin no longer uses `cx:pick`: its own block draws Tern's `picker` node (see
   [The `picker` node](#the-picker-node)), which looks like the palette and can show tabs, badges,
   logos and a tree.
-- An unknown icon name raises. The plugin calls `cx:pick` in `pcall` and retries without icons.
-  Icon names seen in the Tern binary include `terminal`, `sparkle`, `list`, `server`, `folder` and
-  `provider-<name>` brand icons (`provider-anthropic`, `provider-openai`, `provider-github`,
-  `provider-cursor`, …). There is no published list.
+- An unknown icon name raises in `cx:pick` (the `picker` node only leaves it out). The plugin
+  called `cx:pick` in `pcall` and retried without icons. For the icon names, see
+  [Icons](#icons).
 
 ## Window half and host half
 
@@ -146,6 +145,45 @@ From Tern's docs (UI nodes › picker) and checked in a host-half block on Tern 
 - `layout = "tree"` draws depth guides and a chevron: each item's `depth` indents it, `open = true`
   / `false` draws the chevron open or shut, and an item without `open` is a leaf. Folding is the
   plugin's job: it leaves the children out.
+
+## Icons
+
+Checked on Tern 0.9.36, on screen (2026-11-27). Tern's docs: https://docs.stencil.so/tern/print.html
+(Icon names; UI nodes › picker).
+
+- The `picker` node's `icon` and `mark.icon` take Tern icon names only. A `data:image/svg+xml,…`
+  URI, a package path (`icons/x.svg`), `file://`, raw `<svg…>` or `svg:`/`image:`/`url(…)`
+  prefixes are ignored without an error: `icon` then draws no lead at all, `mark` draws the
+  initials of its `text`. A `mark.blob` from `cx:blob` is ignored too. An unknown `icon` name
+  doesn't raise either, it draws nothing, so a plugin should prefer `mark` (initials as fallback).
+- The `image` node (`tern.ui.node("image", {blob = id})`, PNG/JPEG/GIF/WebP/SVG up to 256 KiB) can
+  draw a plugin's image in a block, but picker items take no child nodes.
+- The only way to put a custom image in a picker row is the plugin's manifest CSS: give the item a
+  placeholder `icon`, then paint `.sf-picker .pk-row[data-v='<id>'] .pk-lead` with a background
+  and hide its `svg.ico`. It works, but `pk-*` are inner classes the docs say may change, a remote
+  host's sheets refuse file `url()`s (only `data:` URLs), `mask-image` does nothing (so an SVG
+  must already be in its final colour, which breaks in one of the themes), and copied icons bring
+  their licences along. The plugin doesn't do it.
+- Names: the docs list 208 icons. Among them, `app-*` program marks (`app-claude`, `app-codex`,
+  `app-docker`, `app-vim`, `app-helix`, `app-emacs`, `app-htop`, `app-btop`, `app-node`,
+  `app-python`, `app-rust`, `app-go`, `app-ruby`, `app-java`, `app-deno`, `app-bun`,
+  `app-hermes`, `app-omp`), `pi-mark`, and `terminal`, `sparkle`, `server`, `folder`, `branch`,
+  `database`. Aliases: `shell`/`bash` → `terminal`, `git` → `branch`, `python` → `app-python`.
+  No Apple, Linux or Windows icon.
+- About 1070 Material Icon Theme glyphs as `mi-<id>` (`mi-git`, `mi-docker`, `mi-console`,
+  `mi-npm`, `mi-kubernetes`, …), and `tile-*` app tiles (`tile-omp`, `tile-lazygit`, …).
+- Brand logos are `provider-<id>`; `provider:<id>` (omp's provider id, non-alphanumerics turned
+  into `-`) names the same icon. Both work in `icon` and `mark.icon`, and `mark.icon` takes plain
+  names too. Seen drawn: anthropic, openai, openai-codex, google, gemini, github-copilot, cursor,
+  opencode, kimi-code, moonshot, xai, qwen-portal. About 75 exist (`strings` on the binary:
+  `provider-[a-z0-9-]+`), such as google-antigravity, devin, kilo, ollama, deepseek, mistral.
+  There is no `provider-github`: copilot's logo is `provider-github-copilot`.
+- Why the plugin uses Tern's names rather than the Herdr app's icons: the Herdr app
+  ([herdrdev/herdr-app](https://github.com/herdrdev/herdr-app), Apache-2.0) ships about 128
+  program icons in `defaults/icons/` (Simple Icons CC0, Lucide ISC, LobeHub MIT, and brand marks)
+  and maps programs to them in `defaults/programs.json` and `src/programs.rs`. Drawing them would
+  take the CSS route above. The plugin borrows only the program names and aliases from
+  `programs.json`.
 
 ## Logs and keys
 
@@ -297,13 +335,15 @@ it. This plugin uses English throughout.
 |---|---|
 | `address` | what `hc attach` takes, e.g. `t2p` |
 | `where` | `<workspace> / <tab>`, the human name |
-| `agent` | the foreground program: a shell (`zsh`) or an agent CLI (`claude-code`) |
+| `agent` | the agent's own name while it reports a status (`claude-code`, `antigravity`), else the basename of the program the terminal started with (`zsh`), not the foreground program |
 | `cwd` | the pane's directory |
 | `state` | `live` or `finished` (finished ones appear only with `--all`) |
 | `status` | agent status (`working`, `blocked`, `done`, `idle`), present only for agents |
 | `turn` | turn count |
 
-There is no `name` field, despite what an earlier version of this plugin read.
+There is no `name` field, despite what an earlier version of this plugin read. The foreground
+program (`claude` run from a `zsh`) is in `terminal.list`'s `foreground.argv` (below), or
+`hc get <addr> --json` for one terminal.
 
 ## herdr-core, the Herdr app and spaces
 
@@ -324,8 +364,9 @@ Checked against herdr-app 0.1.17 and hc 0.1.22.
 - `hc ls --json` carries no labels. herdr-core's `terminal.list` method does, in one call:
   `printf '{"jsonrpc":"2.0","id":1,"method":"terminal.list","params":{}}\n' | hc connect --json`
   (`tern.process.run` passes it as `stdin`). Its terminals have no `agent` or `where` field:
-  `where` is `labels.where`, `status` is `{app, state, msg}`, and `foreground.name` can be a version
-  (`2.1.331` for Claude Code). The plugin joins it to `hc ls` by address rather than derive those.
+  `where` is `labels.where`, `status` is `{app, state, msg}`, `foreground` is
+  `{argv, cwd, name, pid}`, and `foreground.name` can be a version (`2.1.331` for Claude Code), so
+  the plugin reads the program from `foreground.argv[1]`. The plugin joins it to `hc ls` by address rather than derive those.
   `hc schema` lists every method.
 - Every terminal in a space carries `herdr.space`, but some (made inside the Herdr app) lack
   `herdr.tab`, so labels don't show the full tab layout. Count tabs by the tab half of `where`.
