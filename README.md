@@ -17,7 +17,7 @@ Usage, requirements and limitations: [plugin/README.md](plugin/README.md).
 ## Repository layout
 
 - `plugin/`: the plugin package, the only folder Tern installs.
-- `docs/`: Tern plugin API findings and decision records.
+- `docs/`: Tern plugin API findings, research notes (`docs/research/`) and decision records.
 - `GLOSSARY.md`: the terms used in code and docs.
 
 ## License

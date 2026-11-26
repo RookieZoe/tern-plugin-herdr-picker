@@ -16,7 +16,7 @@ tern plugin install github.com/RookieZoe/tern-plugin-herdr-picker/plugin
 ## 仓库结构
 
 - `plugin/`：插件包，也是 Tern 唯一会安装的文件夹。
-- `docs/`：Tern 插件 API 的调研记录和决策记录（英文）。
+- `docs/`：Tern 插件 API 的调研结论、各项调研笔记（`docs/research/`）和决策记录（英文）。
 - `GLOSSARY.md`：代码和文档里用到的术语（英文）。
 
 ## 许可证

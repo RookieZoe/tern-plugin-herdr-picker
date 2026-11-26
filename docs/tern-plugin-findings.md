@@ -54,8 +54,8 @@ a Tern upgrade; any of them may change.
 
 ## Host-half blocks
 
-Checked on desktop with Tern 0.9.32 and a throwaway plugin (2026-11-24). Full notes are on the
-`research/host-half-block` branch.
+Checked on desktop with Tern 0.9.32 and a throwaway plugin (2026-11-24). Full notes:
+[research/host-half-block.md](research/host-half-block.md).
 
 - The session daemon's `PATH` is `/usr/bin:/bin:/usr/sbin:/sbin`, and `TERN_EXE` is unset. A bare
   `{"hc", …}` in `tern.process.run` raises and aborts the handler, so call `hc` and `tern` by
@@ -173,8 +173,8 @@ From Tern's docs (UI nodes › picker) and checked in a host-half block on Tern 
 
 ## iOS
 
-From Tern's docs (Architecture, Support Matrix) and the 0.9.32 changelog; details on the
-`research/tern-ios-plugins` branch.
+From Tern's docs (Architecture, Support Matrix) and the 0.9.32 changelog; details in
+[research/tern-ios-plugins.md](research/tern-ios-plugins.md).
 
 - The phone runs window halves only, from its own folder (Files › On My iPhone › Tern › Plugins),
   without JIT. A `window.luau` installed on the Mac doesn't run there. The Mac's daemon still runs the
@@ -246,7 +246,8 @@ says the block is touch-only on iPhone and iPad.
 
 From Tern's docs (Distribution, Window API) and checked on two machines, 2026-11-26 (issue #11): a
 Mac Tern 0.9.35 window attached to a Debian host (Tern 0.9.35, hc 0.1.17), herdr-picker 0.5.2 on
-each. Research notes are on the `research/tern-remote-install` branch.
+each. Research notes:
+[research/tern-remote-install.md](research/tern-remote-install.md).
 
 - A plugin with both halves needs installing on both machines. The client's copy gives the
   `tern.command` keys and the link route; the host's gives the block and its "New … block" palette
