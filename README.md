@@ -1,5 +1,7 @@
 # Herdr Picker
 
+English | [简体中文](README.zh-CN.md)
+
 A Tern plugin for [herdr-core](https://herdr.dev) (`hc`): pick a running herdr-core pane, start a
 new herdr space, or add a tab to one, and open it in a Tern block.
 
